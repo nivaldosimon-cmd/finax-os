@@ -1,0 +1,13 @@
+2026-03-30 13:26:40,716 - INFO - HTTP Request: GET https://ctgycbzuwdcvhlqvtzvx.supabase.co/rest/v1/usuarios?select=count&limit=1 "HTTP/2 200 OK"
+2026-03-30 13:26:59,294 - INFO - HTTP Request: GET https://ctgycbzuwdcvhlqvtzvx.supabase.co/rest/v1/usuarios?select=%2A&username=eq.nv&password=eq.1234 "HTTP/2 200 OK"
+2026-03-30 13:26:59,297 - INFO - Acesso concedido: nv em ADMIN_CENTRAL
+2026-03-30 13:27:12,848 - INFO - Logout efetuado por: nv
+2026-03-30 13:27:20,664 - INFO - HTTP Request: GET https://ctgycbzuwdcvhlqvtzvx.supabase.co/rest/v1/usuarios?select=%2A&username=eq.dv&password=eq.1234 "HTTP/2 200 OK"
+2026-03-30 13:28:04,044 - INFO - HTTP Request: POST https://ctgycbzuwdcvhlqvtzvx.supabase.co/rest/v1/usuarios "HTTP/2 201 Created"
+2026-03-30 13:28:04,402 - INFO - HTTP Request: POST https://ctgycbzuwdcvhlqvtzvx.supabase.co/rest/v1/alunos "HTTP/2 201 Created"
+2026-03-30 13:28:13,923 - INFO - HTTP Request: GET https://ctgycbzuwdcvhlqvtzvx.supabase.co/rest/v1/usuarios?select=%2A&username=eq.dv&password=eq.1234 "HTTP/2 200 OK"
+2026-03-30 13:28:14,322 - INFO - HTTP Request: GET https://ctgycbzuwdcvhlqvtzvx.supabase.co/rest/v1/alunos?select=escola_id&username_ligacao=eq.dv "HTTP/2 200 OK"
+2026-03-30 13:28:14,323 - INFO - Acesso concedido: dv em CBP
+2026-03-30 13:34:57,505 - INFO - Logout efetuado por: dv
+2026-03-30 13:35:20,275 - INFO - HTTP Request: GET https://ctgycbzuwdcvhlqvtzvx.supabase.co/rest/v1/usuarios?select=%2A&username=eq.nv&password=eq.1234 "HTTP/2 200 OK"
+2026-03-30 13:35:20,278 - INFO - Acesso concedido: nv em ADMIN_CENTRAL

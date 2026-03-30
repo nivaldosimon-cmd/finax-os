@@ -1,0 +1,3 @@
+
+SUPABASE_URL = "https://ctgycbzuwdcvhlqvtzvx.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0Z3ljYnp1d2RjdmhscXZ0enZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTgxODksImV4cCI6MjA4ODk5NDE4OX0.i77bCXtbPwKWKShfOo4ZEkqhJ4upxPH0ZIQ84vpOYis"

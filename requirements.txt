@@ -1,0 +1,8 @@
+streamlit==1.55.0
+supabase
+python-dotenv
+pandas
+plotly
+qrcode[pil]
+pillow
+pyzbar
