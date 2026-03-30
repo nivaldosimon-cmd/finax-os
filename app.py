@@ -1,63 +1,31 @@
 """
-FINAX OS - SISTEMA DE GESTÃO ESCOLAR
+UMBRELLA AI - SISTEMA DE GESTÃO ESCOLAR
 Frontend Streamlit Moderno com QR Code Visual
-Versão com campos personalizáveis (Turma, Curso, ID Escola)
+Versão Final - Sem Erros de Elementos Duplicados
 """
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime
 import sys
 import os
 import uuid
+import hashlib
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# ============================================
-# CONFIGURAÇÃO DAS CREDENCIAIS
-# ============================================
-def get_supabase_creds():
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
-        if url and key:
-            return url, key
-    except:
-        pass
-    
-    try:
-        url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_KEY"]
-        return url, key
-    except:
-        pass
-    
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_KEY")
-    return url, key
-
-SUPABASE_URL, SUPABASE_KEY = get_supabase_creds()
-
-with open("temp_config.py", "w") as f:
-    f.write(f"""
-SUPABASE_URL = "{SUPABASE_URL}"
-SUPABASE_KEY = "{SUPABASE_KEY}"
-""")
-
 from modules.database_config import db_config
 from modules.super_perfil import iniciar_login_simples
-from utils.qr_utils import gerar_qr_code_aluno, gerar_qr_code_pagamento, listar_qr_codes
+from utils.qr_utils import gerar_qr_code_aluno, listar_qr_codes
 
 # ============================================
 # CONFIGURAÇÃO DA PÁGINA
 # ============================================
 st.set_page_config(
-    page_title="FinaX OS - Gestão Escolar",
-    page_icon="🏫",
+    page_title="Umbrella AI - Gestão Escolar",
+    page_icon="☂️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -71,7 +39,7 @@ st.markdown("""
     * { font-family: 'Inter', sans-serif; }
     
     .main-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
         padding: 2rem;
         border-radius: 20px;
         margin-bottom: 2rem;
@@ -83,7 +51,7 @@ st.markdown("""
     .main-header h1 { font-size: 2.5rem; margin-bottom: 0.5rem; font-weight: 700; }
     
     .card {
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        background: white;
         border-radius: 20px;
         padding: 1.5rem;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
@@ -96,7 +64,7 @@ st.markdown("""
     
     .metric-card {
         text-align: center;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
         border-radius: 20px;
         padding: 1.2rem;
         color: white;
@@ -106,7 +74,7 @@ st.markdown("""
     .metric-label { font-size: 0.9rem; opacity: 0.9; margin-top: 0.3rem; }
     
     .stButton button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
         color: white;
         border-radius: 12px;
         padding: 0.6rem 1.2rem;
@@ -116,11 +84,11 @@ st.markdown("""
         width: 100%;
     }
     
-    .stButton button:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(102,126,234,0.4); }
+    .stButton button:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(30,58,138,0.4); }
     
-    .badge-success { background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
-    .badge-warning { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
-    .badge-danger { background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+    .badge-success { background: #10B981; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+    .badge-warning { background: #F59E0B; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+    .badge-danger { background: #EF4444; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
     
     .qr-container { background: white; border-radius: 20px; padding: 1.5rem; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
 </style>
@@ -138,6 +106,8 @@ def init_session_state():
         st.session_state.supabase = db_config.get_client()
     if "page" not in st.session_state:
         st.session_state.page = "dashboard"
+    if "show_signup" not in st.session_state:
+        st.session_state.show_signup = False
 
 init_session_state()
 supabase = st.session_state.supabase
@@ -148,7 +118,7 @@ supabase = st.session_state.supabase
 def login_page():
     st.markdown("""
     <div class="main-header">
-        <h1>🏫 FINAX OS</h1>
+        <h1>☂️ UMBRELLA AI</h1>
         <p>Sistema Inteligente de Gestão Escolar</p>
         <p style="font-size: 0.9rem; opacity: 0.9;">✨ Tecnologia | Inovação | Eficiência ✨</p>
     </div>
@@ -159,14 +129,14 @@ def login_page():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 🔐 Acesso ao Sistema")
         
-        username = st.text_input("Username", placeholder="Digite seu username", key="login_username")
-        password = st.text_input("Password", type="password", placeholder="Digite sua senha", key="login_password")
+        login_username = st.text_input("Username", placeholder="Digite seu username", key="login_username_unique")
+        login_password = st.text_input("Password", type="password", placeholder="Digite sua senha", key="login_password_unique")
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("🎯 Entrar", use_container_width=True):
-                if username and password:
-                    user = iniciar_login_simples(username, password)
+            if st.button("🎯 Entrar", key="login_btn_unique", use_container_width=True):
+                if login_username and login_password:
+                    user = iniciar_login_simples(login_username, login_password)
                     if user:
                         st.session_state.authenticated = True
                         st.session_state.user = user
@@ -176,161 +146,202 @@ def login_page():
                 else:
                     st.warning("Preencha todos os campos!")
         with col_btn2:
-            if st.button("📝 Criar Conta", use_container_width=True):
+            if st.button("📝 Criar Conta", key="signup_btn_main_unique", use_container_width=True):
                 st.session_state.show_signup = True
                 st.rerun()
         
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================
-# TELA DE CADASTRO
+# TELA DE CADASTRO (SIGNUP)
 # ============================================
 def signup_page():
     st.markdown("""
     <div class="main-header">
         <h1>📝 Criar Nova Conta</h1>
-        <p>Junte-se ao FinaX OS e modernize sua escola</p>
+        <p>Junte-se ao Umbrella AI e modernize sua escola</p>
     </div>
     """, unsafe_allow_html=True)
     
     tab1, tab2 = st.tabs(["🏢 Sou Administrador", "🎓 Sou Estudante"])
     
+    # ==================== TAB ADMIN ====================
     with tab1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 🏫 Criar Nova Escola")
         
         col1, col2 = st.columns(2)
         with col1:
-            escola_nome = st.text_input("Nome da Escola")
-            escola_endereco = st.text_input("Endereço")
+            escola_nome = st.text_input("Nome da Escola", key="admin_escola_nome")
+            escola_endereco = st.text_input("Endereço", key="admin_escola_endereco")
         with col2:
-            escola_telefone = st.text_input("Telefone")
-            escola_email = st.text_input("Email da Escola")
+            escola_telefone = st.text_input("Telefone da Escola", key="admin_escola_telefone")
+            escola_email = st.text_input("Email da Escola", key="admin_escola_email")
         
         st.markdown("---")
         st.markdown("### 👤 Dados do Administrador")
         
         col1, col2 = st.columns(2)
         with col1:
-            nome = st.text_input("Nome completo")
-            username = st.text_input("Username")
+            admin_nome = st.text_input("Nome completo", key="admin_nome")
+            admin_username = st.text_input("Username", key="admin_username")
         with col2:
-            password = st.text_input("Password", type="password")
-            email = st.text_input("Email")
+            admin_password = st.text_input("Password", type="password", key="admin_password")
+            admin_email = st.text_input("Email", key="admin_email")
         
-        telefone = st.text_input("Telefone")
+        admin_telefone = st.text_input("Telefone", key="admin_telefone")
         
-        if st.button("🚀 Criar Escola e Conta", use_container_width=True):
-            if all([escola_nome, nome, username, password, email]):
+        st.markdown("---")
+        st.markdown("### 🏦 Dados Bancários (IBAN)")
+        
+        iban = st.text_input("IBAN (ex: AO06.0066.0000.1234.5678.9012.3)", key="admin_iban")
+        iban_nome = st.text_input("Nome do Titular da Conta", key="admin_iban_nome")
+        
+        if st.button("🚀 Criar Escola e Conta", key="admin_create_btn", use_container_width=True):
+            if all([escola_nome, admin_nome, admin_username, admin_password, admin_email, admin_telefone, iban, iban_nome]):
                 try:
                     escola_id = f"ESC_{uuid.uuid4().hex[:8].upper()}"
                     admin_id = str(uuid.uuid4())
+                    senha_hash = hashlib.sha256(admin_password.encode()).hexdigest()
+                    
                     dados_admin = {
-                        "id": admin_id,
-                        "username": username.lower(),
-                        "password": password,
-                        "nivel": "Administrador",
-                        "nome": nome,
-                        "escola_id": escola_id,
-                        "classe": "DIREÇÃO",
-                        "turma": "GERAL",
-                        "curso": "ADMINISTRAÇÃO",
-                        "tem_divida": False,
-                        "status_conta": "Ativa",
-                        "email": email,
-                        "telefone": telefone
+                        "id": admin_id, "username": admin_username.lower(), "password": senha_hash,
+                        "nivel": "Administrador", "sub_nivel": "SuperAdmin", "nome": admin_nome,
+                        "email": admin_email, "telefone": admin_telefone, "escola_id": escola_id,
+                        "classe": "DIREÇÃO", "turma": "GERAL", "curso": "ADMINISTRAÇÃO",
+                        "tem_divida": False, "status_conta": "Ativa", "iban": iban,
+                        "iban_nome": iban_nome, "created_at": datetime.now().isoformat()
                     }
+                    
                     supabase.table('usuarios').insert(dados_admin).execute()
+                    
                     st.success("✅ Conta criada com sucesso!")
                     st.info(f"🏛️ ID da Escola: `{escola_id}`")
-                    st.info(f"👤 Username: `{username}`")
-                    if st.button("🔐 Fazer Login Agora"):
+                    st.info(f"👤 Username: `{admin_username}`")
+                    st.info(f"🏦 IBAN: `{iban[:15]}...`")
+                    st.warning("Guarde estas informações!")
+                    
+                    if st.button("🔐 Fazer Login Agora", key="admin_login_after"):
                         st.session_state.user = dados_admin
                         st.session_state.authenticated = True
                         st.rerun()
+                        
                 except Exception as e:
                     st.error(f"Erro: {e}")
             else:
                 st.warning("Preencha todos os campos obrigatórios!")
+        
         st.markdown("</div>", unsafe_allow_html=True)
     
+    # ==================== TAB ESTUDANTE ====================
     with tab2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 🎓 Juntar-se a uma Escola")
         
-        escola_id = st.text_input("ID da Escola", placeholder="EX: ESC_ABC123 (fornecido pelo administrador)")
+        estudante_escola_id = st.text_input("ID da Escola", placeholder="EX: ESC_ABC123", key="estudante_escola_id")
         
         st.markdown("---")
         st.markdown("### 👤 Dados Pessoais")
         
         col1, col2 = st.columns(2)
         with col1:
-            nome = st.text_input("Nome completo")
-            username = st.text_input("Username")
+            estudante_nome = st.text_input("Nome completo", key="estudante_nome")
+            estudante_username = st.text_input("Username", key="estudante_username")
         with col2:
-            password = st.text_input("Password", type="password")
-            email = st.text_input("Email")
+            estudante_password = st.text_input("Password", type="password", key="estudante_password")
+            estudante_email = st.text_input("Email", key="estudante_email")
         
-        telefone = st.text_input("Telefone")
+        estudante_telefone = st.text_input("Telefone", key="estudante_telefone")
+        estudante_data = st.text_input("Data de Nascimento (dd/mm/aaaa)", key="estudante_data")
         
         st.markdown("---")
         st.markdown("### 📚 Dados Académicos")
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            classe = st.text_input("Classe", placeholder="Ex: 10ª, 11ª, 12ª")
+            estudante_classe = st.text_input("Classe (ex: 10ª, 11ª, 12ª)", key="estudante_classe")
         with col2:
-            turma = st.text_input("Turma", placeholder="Ex: A, B, C (ou outra)")
+            estudante_turma = st.text_input("Turma (ex: A, B, C)", key="estudante_turma")
         with col3:
-            curso = st.text_input("Curso", placeholder="Ex: Ciências, Humanidades, Técnico")
+            estudante_curso = st.text_input("Curso (ex: Ciências, Humanidades)", key="estudante_curso")
         
-        if st.button("📝 Cadastrar Estudante", use_container_width=True):
-            if all([escola_id, nome, username, password, classe, turma, curso]):
+        st.markdown("---")
+        st.markdown("### 👨‍👩‍👧 Encarregados de Educação (Opcional)")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            estudante_pai_nome = st.text_input("Nome do Pai", key="estudante_pai_nome")
+            estudante_pai_telefone = st.text_input("Telefone do Pai", key="estudante_pai_telefone")
+        with col2:
+            estudante_mae_nome = st.text_input("Nome da Mãe", key="estudante_mae_nome")
+            estudante_mae_telefone = st.text_input("Telefone da Mãe", key="estudante_mae_telefone")
+        
+        estudante_responsavel_nome = st.text_input("Nome do Responsável (se diferente)", key="estudante_responsavel_nome")
+        estudante_responsavel_telefone = st.text_input("Telefone do Responsável", key="estudante_responsavel_telefone")
+        
+        if st.button("📝 Cadastrar Estudante", key="estudante_register_btn", use_container_width=True):
+            if all([estudante_escola_id, estudante_nome, estudante_username, estudante_password, estudante_email, estudante_telefone, estudante_classe, estudante_turma, estudante_curso]):
                 try:
-                    estudante_id = str(uuid.uuid4())
-                    dados = {
-                        "id": estudante_id,
-                        "username": username.lower(),
-                        "password": password,
-                        "nivel": "Estudante",
-                        "nome": nome,
-                        "escola_id": escola_id,
-                        "classe": classe,
-                        "turma": turma,
-                        "curso": curso,
-                        "tem_divida": True,
-                        "status_conta": "Ativa",
-                        "email": email,
-                        "telefone": telefone
-                    }
-                    supabase.table('usuarios').insert(dados).execute()
-                    st.success("✅ Cadastro realizado com sucesso!")
-                    if st.button("🔐 Fazer Login Agora", key="estudante_login"):
-                        st.session_state.user = dados
-                        st.session_state.authenticated = True
-                        st.rerun()
+                    # Verificar se escola existe
+                    escola_existe = supabase.table('usuarios').select('escola_id').eq('escola_id', estudante_escola_id).limit(1).execute()
+                    if not escola_existe.data:
+                        st.error("Escola não encontrada! Verifique o ID.")
+                    else:
+                        estudante_id = str(uuid.uuid4())
+                        senha_hash = hashlib.sha256(estudante_password.encode()).hexdigest()
+                        
+                        # Gerar QR Code ID
+                        ultimo = supabase.table('usuarios').select('qrcode_id').eq('escola_id', estudante_escola_id).not_.is_('qrcode_id', 'null').order('qrcode_id', desc=True).limit(1).execute()
+                        if ultimo.data and ultimo.data[0]['qrcode_id']:
+                            qrcode_id = str(int(ultimo.data[0]['qrcode_id']) + 1)
+                        else:
+                            qrcode_id = "1001"
+                        
+                        dados = {
+                            "id": estudante_id, "username": estudante_username.lower(), "password": senha_hash,
+                            "nivel": "Estudante", "nome": estudante_nome, "email": estudante_email, "telefone": estudante_telefone,
+                            "escola_id": estudante_escola_id, "classe": estudante_classe, "turma": estudante_turma, "curso": estudante_curso,
+                            "tem_divida": True, "status_conta": "Ativa", "qrcode_id": qrcode_id,
+                            "data_nascimento": estudante_data, "created_at": datetime.now().isoformat(),
+                            "nome_pai": estudante_pai_nome, "telefone_pai": estudante_pai_telefone,
+                            "nome_mae": estudante_mae_nome, "telefone_mae": estudante_mae_telefone,
+                            "nome_responsavel": estudante_responsavel_nome, "telefone_responsavel": estudante_responsavel_telefone
+                        }
+                        
+                        supabase.table('usuarios').insert(dados).execute()
+                        
+                        st.success(f"✅ Estudante {estudante_nome} cadastrado com sucesso!")
+                        st.info(f"Username: {estudante_username}")
+                        st.info(f"QR Code ID: {qrcode_id}")
+                        
+                        if st.button("🔐 Fazer Login Agora", key="estudante_login_after"):
+                            st.session_state.user = dados
+                            st.session_state.authenticated = True
+                            st.rerun()
+                        
                 except Exception as e:
                     st.error(f"Erro: {e}")
             else:
-                st.warning("Preencha todos os campos!")
+                st.warning("Preencha todos os campos obrigatórios!")
         
         st.markdown("</div>", unsafe_allow_html=True)
     
-    if st.button("⬅️ Voltar ao Login"):
+    if st.button("⬅️ Voltar ao Login", key="signup_back_to_login"):
         st.session_state.show_signup = False
         st.rerun()
 
 # ============================================
-# DASHBOARD PRINCIPAL (MESMO CÓDIGO ANTERIOR)
+# DASHBOARD PRINCIPAL
 # ============================================
 def dashboard():
     user = st.session_state.user
     escola_id = user['escola']
     
+    # Sidebar
     with st.sidebar:
         st.markdown(f"""
         <div style="text-align: center; padding: 1rem;">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%); 
                         border-radius: 50%; width: 80px; height: 80px; 
                         margin: 0 auto 1rem; display: flex; align-items: center; 
                         justify-content: center;">
@@ -363,12 +374,12 @@ def dashboard():
             menu = {k: v for k, v in menu_items.items() if k in ['dashboard', 'presencas', 'notas', 'ranking', 'material', 'denuncias', 'qrcodes']}
         
         for key, label in menu.items():
-            if st.sidebar.button(label, key=f"menu_{key}", use_container_width=True):
+            if st.sidebar.button(label, key=f"sidebar_{key}", use_container_width=True):
                 st.session_state.page = key
                 st.rerun()
         
         st.markdown("---")
-        if st.button("🚪 Sair", use_container_width=True):
+        if st.button("🚪 Sair", key="sidebar_logout", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.user = None
             st.rerun()
@@ -397,119 +408,7 @@ def dashboard():
         config_page(user, supabase, escola_id)
 
 # ============================================
-# PÁGINA ALUNOS (COM CAMPOS PERSONALIZÁVEIS)
-# ============================================
-def alunos_page(user, supabase, escola_id):
-    st.markdown("""
-    <div class="main-header">
-        <h1>👥 Gestão de Alunos</h1>
-        <p>Cadastre e gerencie os alunos</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    alunos = supabase.table('usuarios').select('*').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
-    
-    if alunos.data:
-        df = pd.DataFrame(alunos.data)
-        df = df[['id', 'nome', 'classe', 'turma', 'curso', 'tem_divida']]
-        df.columns = ['ID', 'Nome', 'Classe', 'Turma', 'Curso', 'Débito']
-        df['Status'] = df['Débito'].apply(lambda x: "🔴 Débito" if x else "🟢 Em dia")
-        st.dataframe(df, use_container_width=True)
-        st.info(f"Total: {len(alunos.data)} alunos")
-    
-    with st.expander("➕ Cadastrar Novo Aluno"):
-        with st.form("cadastro_aluno"):
-            col1, col2 = st.columns(2)
-            with col1:
-                nome = st.text_input("Nome completo")
-                username = st.text_input("Username")
-                password = st.text_input("Password", type="password")
-            with col2:
-                email = st.text_input("Email")
-                telefone = st.text_input("Telefone")
-            
-            st.markdown("---")
-            st.markdown("### 📚 Dados Académicos")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                classe = st.text_input("Classe", placeholder="Ex: 10ª, 11ª, 12ª")
-            with col2:
-                turma = st.text_input("Turma", placeholder="Ex: A, B, C (ou outra)")
-            with col3:
-                curso = st.text_input("Curso", placeholder="Ex: Ciências, Humanidades, Técnico")
-            
-            if st.form_submit_button("Cadastrar"):
-                if nome and username and password and classe and turma and curso:
-                    aluno_id = str(uuid.uuid4())
-                    dados = {
-                        "id": aluno_id,
-                        "username": username.lower(),
-                        "password": password,
-                        "nivel": "Estudante",
-                        "nome": nome,
-                        "escola_id": escola_id,
-                        "classe": classe,
-                        "turma": turma,
-                        "curso": curso,
-                        "tem_divida": True,
-                        "status_conta": "Ativa",
-                        "email": email,
-                        "telefone": telefone
-                    }
-                    supabase.table('usuarios').insert(dados).execute()
-                    st.success(f"✅ Aluno {nome} cadastrado com sucesso!")
-                    st.rerun()
-                else:
-                    st.warning("Preencha todos os campos (Nome, Username, Password, Classe, Turma, Curso)!")
-
-# ============================================
-# PÁGINA RANKING (ATUALIZADA)
-# ============================================
-def ranking_page(user, supabase, escola_id):
-    st.markdown("""
-    <div class="main-header">
-        <h1>🏆 Ranking de Alunos</h1>
-        <p>Os melhores alunos da escola</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    alunos = supabase.table('usuarios').select('id, nome, classe, turma, curso').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
-    
-    ranking_data = []
-    for aluno in alunos.data:
-        notas = supabase.table('notas').select('media').eq('aluno_id', aluno['id']).execute()
-        media = sum(n['media'] for n in notas.data) / len(notas.data) if notas.data else 0
-        ranking_data.append({
-            "Nome": aluno['nome'],
-            "Classe": aluno.get('classe', 'N/A'),
-            "Turma": aluno.get('turma', 'N/A'),
-            "Curso": aluno.get('curso', 'N/A'),
-            "Média": media
-        })
-    
-    ranking_data.sort(key=lambda x: x['Média'], reverse=True)
-    df = pd.DataFrame(ranking_data)
-    
-    medalhas = []
-    for i in range(len(df)):
-        if i == 0:
-            medalhas.append("🥇 1º")
-        elif i == 1:
-            medalhas.append("🥈 2º")
-        elif i == 2:
-            medalhas.append("🥉 3º")
-        else:
-            medalhas.append(f"{i+1}º")
-    
-    df.insert(0, "Posição", medalhas)
-    st.dataframe(df, use_container_width=True)
-    
-    fig = px.bar(df.head(10), x='Nome', y='Média', title="Top 10 Alunos", color='Média', color_continuous_scale='Viridis')
-    st.plotly_chart(fig, use_container_width=True)
-
-# ============================================
-# DEMAIS PÁGINAS (MESMO CÓDIGO ANTERIOR)
+# PÁGINA DASHBOARD
 # ============================================
 def dashboard_home(user, supabase, escola_id):
     st.markdown("""
@@ -540,6 +439,7 @@ def dashboard_home(user, supabase, escola_id):
         st.markdown(f"<div class='metric-card'><div class='metric-value'>{percentual:.0f}%</div><div class='metric-label'>📈 % Presença</div></div>", unsafe_allow_html=True)
     
     st.markdown("---")
+    
     col1, col2 = st.columns(2)
     with col1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -556,6 +456,7 @@ def dashboard_home(user, supabase, escola_id):
         else:
             st.info("Nenhum aluno cadastrado.")
         st.markdown('</div>', unsafe_allow_html=True)
+    
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### ⚠️ Status Financeiro")
@@ -577,6 +478,9 @@ def dashboard_home(user, supabase, escola_id):
         st.info("Nenhuma atividade recente.")
     st.markdown('</div>', unsafe_allow_html=True)
 
+# ============================================
+# PÁGINA PRESENÇAS
+# ============================================
 def presencas_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -589,37 +493,49 @@ def presencas_page(user, supabase, escola_id):
     with col1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 📷 Registrar Entrada")
-        qr_code = st.text_input("Código QR (username do aluno)")
-        if st.button("Registrar Entrada", use_container_width=True):
+        
+        qr_code = st.text_input("Código QR (username ou ID)", key="presenca_qr")
+        
+        if st.button("Registrar Entrada", key="presenca_btn", use_container_width=True):
             if qr_code:
-                aluno = supabase.table('usuarios').select('*').eq('username', qr_code).eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
+                # Buscar por qrcode_id ou username
+                aluno = supabase.table('usuarios').select('*').eq('qrcode_id', qr_code).eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
+                if not aluno.data:
+                    aluno = supabase.table('usuarios').select('*').eq('username', qr_code).eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
+                
                 if aluno.data:
                     aluno_data = aluno.data[0]
                     agora = datetime.now()
                     hora = agora.strftime("%H:%M:%S")
                     data = agora.strftime("%Y-%m-%d")
                     status = "ATRASADO" if agora.hour > 7 or (agora.hour == 7 and agora.minute > 30) else "PRESENTE"
-                    presenca_id = str(uuid.uuid4())
-                    supabase.table('presencas').insert({
-                        "id": presenca_id, "aluno_id": aluno_data['id'], "aluno_username": qr_code,
-                        "nome_aluno": aluno_data['nome'], "escola_id": escola_id,
-                        "data": data, "hora_entrada": hora, "status": status
-                    }).execute()
-                    if status == "PRESENTE":
-                        supabase.table('usuarios').update({"total_presencas": aluno_data.get('total_presencas', 0) + 1}).eq('id', aluno_data['id']).execute()
+                    
+                    # Verificar se já registou hoje
+                    ja_registou = supabase.table('presencas').select('id').eq('aluno_id', aluno_data['id']).eq('data', data).execute()
+                    if ja_registou.data:
+                        st.warning(f"⚠️ {aluno_data['nome']} já registou presença hoje!")
                     else:
-                        supabase.table('usuarios').update({"total_atrasos": aluno_data.get('total_atrasos', 0) + 1}).eq('id', aluno_data['id']).execute()
-                    st.success(f"✅ {aluno_data['nome']} - {status} às {hora}")
+                        presenca_id = str(uuid.uuid4())
+                        supabase.table('presencas').insert({
+                            "id": presenca_id, "aluno_id": aluno_data['id'], "aluno_username": aluno_data['username'],
+                            "nome_aluno": aluno_data['nome'], "escola_id": escola_id,
+                            "data": data, "hora_entrada": hora, "status": status
+                        }).execute()
+                        st.success(f"✅ {aluno_data['nome']} - {status} às {hora}")
                 else:
                     st.error("Aluno não encontrado!")
             else:
                 st.warning("Digite o código QR!")
+        
         st.markdown('</div>', unsafe_allow_html=True)
+    
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 📋 Presenças de Hoje")
+        
         hoje = datetime.now().strftime("%Y-%m-%d")
         presencas = supabase.table('presencas').select('*').eq('escola_id', escola_id).eq('data', hoje).execute()
+        
         if presencas.data:
             df = pd.DataFrame(presencas.data)
             df = df[['nome_aluno', 'hora_entrada', 'status']]
@@ -628,8 +544,77 @@ def presencas_page(user, supabase, escola_id):
             st.info(f"Total: {len(presencas.data)} registos")
         else:
             st.info("Nenhuma presença registada hoje.")
+        
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ============================================
+# PÁGINA ALUNOS
+# ============================================
+def alunos_page(user, supabase, escola_id):
+    st.markdown("""
+    <div class="main-header">
+        <h1>👥 Gestão de Alunos</h1>
+        <p>Cadastre e gerencie os alunos</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    alunos = supabase.table('usuarios').select('*').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
+    
+    if alunos.data:
+        df = pd.DataFrame(alunos.data)
+        df = df[['id', 'nome', 'classe', 'turma', 'curso', 'tem_divida', 'qrcode_id']]
+        df.columns = ['ID', 'Nome', 'Classe', 'Turma', 'Curso', 'Débito', 'QR ID']
+        df['Status'] = df['Débito'].apply(lambda x: "🔴 Débito" if x else "🟢 Em dia")
+        st.dataframe(df, use_container_width=True)
+        st.info(f"Total: {len(alunos.data)} alunos")
+    
+    with st.expander("➕ Cadastrar Novo Aluno"):
+        with st.form("cadastro_aluno_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                novo_nome = st.text_input("Nome completo", key="novo_nome")
+                novo_username = st.text_input("Username", key="novo_username")
+                novo_password = st.text_input("Password", type="password", key="novo_password")
+            with col2:
+                novo_email = st.text_input("Email", key="novo_email")
+                novo_telefone = st.text_input("Telefone", key="novo_telefone")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                novo_classe = st.text_input("Classe", key="novo_classe")
+            with col2:
+                novo_turma = st.text_input("Turma", key="novo_turma")
+            with col3:
+                novo_curso = st.text_input("Curso", key="novo_curso")
+            
+            if st.form_submit_button("Cadastrar"):
+                if novo_nome and novo_username and novo_password and novo_classe and novo_turma and novo_curso:
+                    aluno_id = str(uuid.uuid4())
+                    senha_hash = hashlib.sha256(novo_password.encode()).hexdigest()
+                    
+                    # Gerar QR Code ID
+                    ultimo = supabase.table('usuarios').select('qrcode_id').eq('escola_id', escola_id).not_.is_('qrcode_id', 'null').order('qrcode_id', desc=True).limit(1).execute()
+                    if ultimo.data and ultimo.data[0]['qrcode_id']:
+                        qrcode_id = str(int(ultimo.data[0]['qrcode_id']) + 1)
+                    else:
+                        qrcode_id = "1001"
+                    
+                    dados = {
+                        "id": aluno_id, "username": novo_username.lower(), "password": senha_hash,
+                        "nivel": "Estudante", "nome": novo_nome, "email": novo_email, "telefone": novo_telefone,
+                        "escola_id": escola_id, "classe": novo_classe, "turma": novo_turma, "curso": novo_curso,
+                        "tem_divida": True, "status_conta": "Ativa", "qrcode_id": qrcode_id,
+                        "created_at": datetime.now().isoformat()
+                    }
+                    supabase.table('usuarios').insert(dados).execute()
+                    st.success(f"✅ Aluno {novo_nome} cadastrado com sucesso!")
+                    st.rerun()
+                else:
+                    st.warning("Preencha todos os campos!")
+
+# ============================================
+# PÁGINA NOTAS
+# ============================================
 def notas_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -647,50 +632,91 @@ def notas_page(user, supabase, escola_id):
     with col1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 📝 Lançar Notas")
-        aluno_nome = st.selectbox("Aluno", [a['nome'] for a in alunos.data])
+        
+        aluno_nome = st.selectbox("Aluno", [a['nome'] for a in alunos.data], key="notas_aluno_select")
         aluno = next(a for a in alunos.data if a['nome'] == aluno_nome)
-        disciplina = st.text_input("Disciplina")
+        disciplina = st.text_input("Disciplina", key="notas_disciplina")
+        
         col_n1, col_n2, col_n3 = st.columns(3)
         with col_n1:
-            nota1 = st.number_input("Nota 1", min_value=0.0, max_value=20.0, step=0.5)
+            nota1 = st.number_input("Nota 1", min_value=0.0, max_value=20.0, step=0.5, key="nota1")
         with col_n2:
-            nota2 = st.number_input("Nota 2", min_value=0.0, max_value=20.0, step=0.5)
+            nota2 = st.number_input("Nota 2", min_value=0.0, max_value=20.0, step=0.5, key="nota2")
         with col_n3:
-            nota3 = st.number_input("Nota 3", min_value=0.0, max_value=20.0, step=0.5)
-        faltas = st.number_input("Faltas", min_value=0, step=1)
-        if st.button("Lançar Notas", use_container_width=True):
+            nota3 = st.number_input("Nota 3", min_value=0.0, max_value=20.0, step=0.5, key="nota3")
+        
+        faltas = st.number_input("Faltas", min_value=0, step=1, key="notas_faltas")
+        
+        if st.button("Lançar Notas", key="lancar_notas_btn", use_container_width=True):
             if disciplina and (nota1 > 0 or nota2 > 0 or nota3 > 0):
                 media = (nota1 + nota2 + nota3) / 3
-                dados = {"nota_1": nota1, "nota_2": nota2, "nota_3": nota3, "faltas": faltas, "media": media, "disciplina": disciplina, "aluno_id": aluno['id'], "aluno_username": aluno['nome'].lower().replace(' ', '.'), "escola_id": escola_id}
-                existente = supabase.table('notas').select('*').eq('aluno_id', aluno['id']).eq('disciplina', disciplina).execute()
-                if existente.data:
-                    supabase.table('notas').update(dados).eq('id', existente.data[0]['id']).execute()
-                    st.success(f"✅ Notas de {disciplina} atualizadas!")
-                else:
-                    dados["id"] = str(uuid.uuid4())
-                    supabase.table('notas').insert(dados).execute()
-                    st.success(f"✅ Notas de {disciplina} lançadas!")
+                dados = {
+                    "nota_1": nota1, "nota_2": nota2, "nota_3": nota3, "faltas": faltas,
+                    "media": media, "disciplina": disciplina, "aluno_id": aluno['id'],
+                    "aluno_username": aluno['nome'].lower().replace(' ', '.'),
+                    "escola_id": escola_id, "id": str(uuid.uuid4())
+                }
+                supabase.table('notas').insert(dados).execute()
+                st.success(f"✅ Notas de {disciplina} lançadas! Média: {media:.1f}")
             else:
                 st.warning("Preencha a disciplina e pelo menos uma nota!")
         st.markdown('</div>', unsafe_allow_html=True)
+    
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 📋 Boletim do Aluno")
-        aluno_boletim = st.selectbox("Aluno", [a['nome'] for a in alunos.data], key="boletim")
+        
+        aluno_boletim = st.selectbox("Aluno", [a['nome'] for a in alunos.data], key="boletim_aluno_select")
         aluno = next(a for a in alunos.data if a['nome'] == aluno_boletim)
         notas = supabase.table('notas').select('*').eq('aluno_id', aluno['id']).execute()
+        
         if notas.data:
             df = pd.DataFrame(notas.data)
             df = df[['disciplina', 'nota_1', 'nota_2', 'nota_3', 'media', 'faltas']]
             df.columns = ['Disciplina', 'N1', 'N2', 'N3', 'Média', 'Faltas']
-            def color_media(val): return 'color: #10B981' if val >= 10 else 'color: #EF4444'
-            st.dataframe(df.style.applymap(color_media, subset=['Média']), use_container_width=True)
+            st.dataframe(df, use_container_width=True)
             media_geral = df['Média'].mean()
             st.metric("Média Geral", f"{media_geral:.1f}", delta="Aprovado" if media_geral >= 10 else "Reprovado")
         else:
             st.info("Nenhuma nota registada.")
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ============================================
+# PÁGINA RANKING
+# ============================================
+def ranking_page(user, supabase, escola_id):
+    st.markdown("""
+    <div class="main-header">
+        <h1>🏆 Ranking de Alunos</h1>
+        <p>Os melhores alunos da escola</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    alunos = supabase.table('usuarios').select('id, nome, classe, turma').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
+    ranking_data = []
+    for aluno in alunos.data:
+        notas = supabase.table('notas').select('media').eq('aluno_id', aluno['id']).execute()
+        media = sum(n['media'] for n in notas.data) / len(notas.data) if notas.data else 0
+        ranking_data.append({"Nome": aluno['nome'], "Turma": f"{aluno.get('classe', '')} {aluno.get('turma', '')}", "Média": media})
+    
+    ranking_data.sort(key=lambda x: x['Média'], reverse=True)
+    df = pd.DataFrame(ranking_data)
+    
+    medalhas = []
+    for i in range(len(df)):
+        if i == 0: medalhas.append("🥇 1º")
+        elif i == 1: medalhas.append("🥈 2º")
+        elif i == 2: medalhas.append("🥉 3º")
+        else: medalhas.append(f"{i+1}º")
+    
+    df.insert(0, "Posição", medalhas)
+    st.dataframe(df, use_container_width=True)
+    fig = px.bar(df.head(10), x='Nome', y='Média', title="Top 10 Alunos", color='Média', color_continuous_scale='Viridis')
+    st.plotly_chart(fig, use_container_width=True)
+
+# ============================================
+# PÁGINA FINANCEIRO
+# ============================================
 def financeiro_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -699,50 +725,36 @@ def financeiro_page(user, supabase, escola_id):
     </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["📊 Visão Geral", "💵 Processar Pagamento", "📜 Histórico"])
-    with tab1:
-        alunos = supabase.table('usuarios').select('*').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
-        total_alunos = len(alunos.data) if alunos.data else 0
-        alunos_debito = sum(1 for a in alunos.data if a.get('tem_divida', False)) if alunos.data else 0
-        col1, col2 = st.columns(2)
-        with col1: st.metric("Total de Alunos", total_alunos)
-        with col2: st.metric("Alunos com Débito", alunos_debito)
-        receitas = supabase.table('receitas').select('*').execute()
-        if receitas.data:
-            total_recebido = sum(r['valor_pago'] for r in receitas.data)
-            total_lucro = sum(r['lucro_finax'] for r in receitas.data)
-            st.metric("Total Recebido", f"{total_recebido:,.0f} Kz")
-            st.metric("Lucro FinaX (2%)", f"{total_lucro:,.0f} Kz")
-    with tab2:
-        alunos_debito_list = supabase.table('usuarios').select('id, nome').eq('escola_id', escola_id).eq('nivel', 'Estudante').eq('tem_divida', True).execute()
-        if alunos_debito_list.data:
-            aluno_opcoes = {a['nome']: a['id'] for a in alunos_debito_list.data}
-            aluno_selecionado = st.selectbox("Aluno com débito", list(aluno_opcoes.keys()))
-            valor = st.number_input("Valor da propina (Kz)", min_value=1000, step=5000, value=50000)
-            if st.button("Registrar Pagamento", use_container_width=True):
-                aluno_id = aluno_opcoes[aluno_selecionado]
-                lucro = valor * 0.02
-                supabase.table('receitas').insert({"id": str(uuid.uuid4()), "aluno_id": aluno_id, "valor_pago": valor, "lucro_finax": lucro, "data_pagamento": datetime.now().isoformat()}).execute()
-                supabase.table('usuarios').update({"tem_divida": False}).eq('id', aluno_id).execute()
-                st.success(f"✅ Pagamento registado!")
-                st.info(f"💰 Lucro FinaX: {lucro:,.2f} Kz")
-                st.rerun()
-        else:
-            st.info("Nenhum aluno com débito pendente.")
-    with tab3:
-        alunos_list = supabase.table('usuarios').select('id, nome').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
-        if alunos_list.data:
-            aluno_historico = st.selectbox("Aluno", [a['nome'] for a in alunos_list.data])
-            aluno_id = next(a['id'] for a in alunos_list.data if a['nome'] == aluno_historico)
-            pagamentos = supabase.table('receitas').select('*').eq('aluno_id', aluno_id).order('data_pagamento', desc=True).execute()
-            if pagamentos.data:
-                df = pd.DataFrame(pagamentos.data)
-                df = df[['data_pagamento', 'valor_pago', 'lucro_finax']]
-                df.columns = ['Data', 'Valor Pago', 'Lucro FinaX']
-                st.dataframe(df, use_container_width=True)
-            else:
-                st.info("Nenhum pagamento registado.")
+    alunos = supabase.table('usuarios').select('*').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
+    total_alunos = len(alunos.data) if alunos.data else 0
+    alunos_debito = sum(1 for a in alunos.data if a.get('tem_divida', False)) if alunos.data else 0
+    
+    col1, col2 = st.columns(2)
+    with col1: st.metric("Total de Alunos", total_alunos)
+    with col2: st.metric("Alunos com Débito", alunos_debito)
+    
+    st.markdown("---")
+    st.markdown("### 💵 Processar Pagamento")
+    
+    alunos_debito_list = supabase.table('usuarios').select('id, nome').eq('escola_id', escola_id).eq('nivel', 'Estudante').eq('tem_divida', True).execute()
+    if alunos_debito_list.data:
+        aluno_opcoes = {a['nome']: a['id'] for a in alunos_debito_list.data}
+        aluno_selecionado = st.selectbox("Aluno com débito", list(aluno_opcoes.keys()), key="financeiro_aluno_select")
+        valor = st.number_input("Valor da propina (Kz)", min_value=1000, step=5000, value=50000, key="financeiro_valor")
+        
+        if st.button("Registrar Pagamento", key="financeiro_pagar_btn", use_container_width=True):
+            aluno_id = aluno_opcoes[aluno_selecionado]
+            lucro = valor * 0.02
+            supabase.table('receitas').insert({"id": str(uuid.uuid4()), "aluno_id": aluno_id, "valor_pago": valor, "lucro_finax": lucro, "data_pagamento": datetime.now().isoformat()}).execute()
+            supabase.table('usuarios').update({"tem_divida": False}).eq('id', aluno_id).execute()
+            st.success(f"✅ Pagamento registado! Lucro FinaX: {lucro:,.2f} Kz")
+            st.rerun()
+    else:
+        st.info("Nenhum aluno com débito pendente.")
 
+# ============================================
+# PÁGINA MATERIAL
+# ============================================
 def material_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -762,26 +774,34 @@ def material_page(user, supabase, escola_id):
                 with col2:
                     st.caption(m['data_upload'][:10] if m['data_upload'] else '')
                 with col3:
-                    st.markdown(f'<a href="{m["url_acesso"]}" target="_blank"><button style="background: #667eea; color: white; border: none; border-radius: 8px; padding: 0.3rem 1rem;">🔗 Abrir</button></a>', unsafe_allow_html=True)
+                    st.markdown(f'<a href="{m["url_acesso"]}" target="_blank"><button style="background: #1E3A8A; color: white; border: none; border-radius: 8px; padding: 0.3rem 1rem;">🔗 Abrir</button></a>', unsafe_allow_html=True)
                 st.divider()
     else:
         st.info("Nenhum material disponível.")
     
     if user['nivel'] == 'Administrador':
         with st.expander("➕ Adicionar Material"):
-            with st.form("upload"):
-                titulo = st.text_input("Título")
-                disciplina = st.text_input("Disciplina")
-                tipo = st.selectbox("Tipo", ["PDF", "Link", "Vídeo"])
-                url = st.text_input("URL/Link")
+            with st.form("upload_material_form"):
+                mat_titulo = st.text_input("Título", key="mat_titulo")
+                mat_disciplina = st.text_input("Disciplina", key="mat_disciplina")
+                mat_tipo = st.selectbox("Tipo", ["PDF", "Link", "Vídeo"], key="mat_tipo")
+                mat_url = st.text_input("URL/Link", key="mat_url")
+                
                 if st.form_submit_button("Publicar"):
-                    if titulo and disciplina and url:
-                        supabase.table('materiais').insert({"id": str(uuid.uuid4()), "titulo": titulo, "disciplina": disciplina, "tipo": tipo, "url_acesso": url, "escola_id": escola_id, "data_upload": datetime.now().isoformat()}).execute()
+                    if mat_titulo and mat_disciplina and mat_url:
+                        supabase.table('materiais').insert({
+                            "id": str(uuid.uuid4()), "titulo": mat_titulo, "disciplina": mat_disciplina,
+                            "tipo": mat_tipo, "url_acesso": mat_url, "escola_id": escola_id,
+                            "data_upload": datetime.now().isoformat()
+                        }).execute()
                         st.success("Material publicado!")
                         st.rerun()
                     else:
                         st.warning("Preencha todos os campos!")
 
+# ============================================
+# PÁGINA DENÚNCIAS
+# ============================================
 def denuncias_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -792,13 +812,18 @@ def denuncias_page(user, supabase, escola_id):
     
     if user['nivel'] == 'Estudante':
         st.info("🔒 A sua identidade será PRESERVADA. Use este canal com responsabilidade.")
-        with st.form("denuncia"):
-            tipo = st.selectbox("Tipo", ["Bullying", "Infraestrutura", "Assédio", "Outros"])
-            titulo = st.text_input("Título")
-            descricao = st.text_area("Descrição detalhada")
+        with st.form("denuncia_form"):
+            den_tipo = st.selectbox("Tipo", ["Bullying", "Infraestrutura", "Assédio", "Outros"], key="den_tipo")
+            den_titulo = st.text_input("Título", key="den_titulo")
+            den_descricao = st.text_area("Descrição detalhada", key="den_descricao")
+            
             if st.form_submit_button("Enviar Denúncia Anónima"):
-                if titulo and descricao:
-                    supabase.table('denuncias').insert({"id": str(uuid.uuid4()), "titulo": titulo, "descricao": descricao, "tipo": tipo, "status": "Pendente", "escola_id": escola_id, "data": datetime.now().isoformat()}).execute()
+                if den_titulo and den_descricao:
+                    supabase.table('denuncias').insert({
+                        "id": str(uuid.uuid4()), "titulo": den_titulo, "descricao": den_descricao,
+                        "tipo": den_tipo, "status": "Pendente", "escola_id": escola_id,
+                        "data": datetime.now().isoformat()
+                    }).execute()
                     st.success("✅ Denúncia registada com sucesso!")
                 else:
                     st.warning("Preencha título e descrição!")
@@ -811,23 +836,115 @@ def denuncias_page(user, supabase, escola_id):
             st.dataframe(df, use_container_width=True)
             st.markdown("---")
             st.markdown("### 📄 Detalhes da Denúncia")
-            denuncia_selecionada = st.selectbox("Selecione", [d['titulo'] for d in denuncias.data])
-            denuncia = next(d for d in denuncias.data if d['titulo'] == denuncia_selecionada)
+            den_select = st.selectbox("Selecione", [d['titulo'] for d in denuncias.data], key="den_select")
+            denuncia = next(d for d in denuncias.data if d['titulo'] == den_select)
+            
             st.markdown(f"**Título:** {denuncia['titulo']}")
             st.markdown(f"**Tipo:** {denuncia['tipo']}")
             st.markdown(f"**Data:** {denuncia['data'][:19] if denuncia['data'] else 'N/A'}")
             st.markdown(f"**Status:** {denuncia['status']}")
             st.markdown(f"**Descrição:** {denuncia['descricao']}")
+            
             novos_status = ["Pendente", "Em Análise", "Resolvido"]
-            novo_status = st.selectbox("Alterar status", novos_status, index=novos_status.index(denuncia['status']))
+            novo_status = st.selectbox("Alterar status", novos_status, index=novos_status.index(denuncia['status']), key="den_status")
+            
             if novo_status != denuncia['status']:
-                if st.button("Atualizar Status"):
+                if st.button("Atualizar Status", key="den_update_btn"):
                     supabase.table('denuncias').update({"status": novo_status}).eq('id', denuncia['id']).execute()
                     st.success("Status atualizado!")
                     st.rerun()
         else:
             st.info("Nenhuma denúncia registada.")
 
+# ============================================
+# PÁGINA QR CODES
+# ============================================
+def qrcodes_page(user, supabase, escola_id):
+    st.markdown("""
+    <div class="main-header">
+        <h1>📱 QR Codes</h1>
+        <p>Gere QR codes com ID numérico único para os alunos</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    tab1, tab2 = st.tabs(["🎓 QR Code do Aluno", "📁 QR Codes Gerados"])
+    
+    with tab1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### 🎓 Gerar QR Code do Aluno")
+        
+        alunos = supabase.table('usuarios').select('id, nome, username, classe, turma, qrcode_id').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
+        
+        if alunos.data:
+            aluno_opcoes = {}
+            for a in alunos.data:
+                if a.get('qrcode_id'):
+                    display = f"{a['nome']} (ID: {a['qrcode_id']})"
+                else:
+                    display = f"{a['nome']} (sem QR)"
+                aluno_opcoes[display] = a
+            
+            qr_aluno_select = st.selectbox("Selecione o aluno", list(aluno_opcoes.keys()), key="qr_aluno_select")
+            aluno = aluno_opcoes[qr_aluno_select]
+            
+            if st.button("🆕 Gerar Novo ID", key="qr_gen_id_btn", use_container_width=True):
+                ultimo_id = supabase.table('usuarios').select('qrcode_id').eq('escola_id', escola_id).not_.is_('qrcode_id', 'null').order('qrcode_id', desc=True).limit(1).execute()
+                if ultimo_id.data and ultimo_id.data[0]['qrcode_id']:
+                    novo_id = str(int(ultimo_id.data[0]['qrcode_id']) + 1)
+                else:
+                    novo_id = "1001"
+                supabase.table('usuarios').update({"qrcode_id": novo_id}).eq('id', aluno['id']).execute()
+                st.success(f"✅ ID {novo_id} gerado para {aluno['nome']}")
+                st.rerun()
+            
+            if aluno.get('qrcode_id'):
+                if st.button("📱 Gerar QR Code", key="qr_generate_btn", use_container_width=True):
+                    with st.spinner("Gerando QR code..."):
+                        turma_completa = f"{aluno.get('classe', '')} {aluno.get('turma', '')}".strip()
+                        caminho = gerar_qr_code_aluno(
+                            aluno_id=aluno['id'],
+                            nome=aluno['nome'],
+                            turma=turma_completa,
+                            qrcode_id=aluno['qrcode_id']
+                        )
+                        if os.path.exists(caminho):
+                            st.markdown('<div class="qr-container">', unsafe_allow_html=True)
+                            st.image(caminho, caption=f"QR Code de {aluno['nome']} - ID: {aluno['qrcode_id']}", use_container_width=True)
+                            st.success(f"✅ QR Code gerado para {aluno['nome']}")
+                            with open(caminho, "rb") as file:
+                                st.download_button(label="📥 Baixar QR Code", data=file, file_name=f"qr_{aluno['qrcode_id']}.png", mime="image/png", key="qr_download_btn")
+                            st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.warning("⚠️ Primeiro gere um ID para este aluno!")
+        else:
+            st.info("Nenhum aluno cadastrado.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with tab2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### 📁 QR Codes Gerados")
+        
+        qrcodes = listar_qr_codes()
+        if qrcodes:
+            for i, qr in enumerate(qrcodes):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(f"📱 **{qr}**")
+                with col2:
+                    caminho = os.path.join("qrcodes", qr)
+                    if os.path.exists(caminho):
+                        with open(caminho, "rb") as file:
+                            st.download_button(label="📥 Download", data=file, file_name=qr, mime="image/png", key=f"qr_download_list_{i}")
+                st.divider()
+        else:
+            st.info("Nenhum QR code gerado ainda.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ============================================
+# PÁGINA CONFIGURAÇÕES
+# ============================================
 def config_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -838,104 +955,35 @@ def config_page(user, supabase, escola_id):
     
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("### 👤 Meu Perfil")
+    
     col1, col2 = st.columns(2)
     with col1:
-        st.text_input("Nome", value=user['nome'], disabled=True)
-        st.text_input("Username", value=user['username'], disabled=True)
+        st.text_input("Nome", value=user['nome'], disabled=True, key="config_nome")
+        st.text_input("Username", value=user['username'], disabled=True, key="config_username")
     with col2:
-        st.text_input("Email", value=user.get('email', 'Não definido'), disabled=True)
-        st.text_input("Telefone", value=user.get('telefone', 'Não definido'), disabled=True)
+        st.text_input("Email", value=user.get('email', 'Não definido'), disabled=True, key="config_email")
+        st.text_input("Telefone", value=user.get('telefone', 'Não definido'), disabled=True, key="config_telefone")
+    
+    if user.get('iban'):
+        st.markdown("### 🏦 Dados Bancários")
+        st.text_input("IBAN", value=user.get('iban', ''), disabled=True, key="config_iban")
+        st.text_input("Titular", value=user.get('iban_nome', ''), disabled=True, key="config_iban_nome")
+    
     st.markdown("---")
     st.markdown("### 🔑 Alterar Senha")
-    nova_senha = st.text_input("Nova senha", type="password")
-    confirmar_senha = st.text_input("Confirmar nova senha", type="password")
-    if st.button("Atualizar Senha"):
+    
+    nova_senha = st.text_input("Nova senha", type="password", key="nova_senha")
+    confirmar_senha = st.text_input("Confirmar nova senha", type="password", key="confirmar_senha")
+    
+    if st.button("Atualizar Senha", key="atualizar_senha_btn"):
         if nova_senha and nova_senha == confirmar_senha:
-            supabase.table('usuarios').update({"password": nova_senha}).eq('id', user['id']).execute()
+            senha_hash = hashlib.sha256(nova_senha.encode()).hexdigest()
+            supabase.table('usuarios').update({"password": senha_hash}).eq('id', user['id']).execute()
             st.success("Senha alterada com sucesso!")
         else:
             st.warning("As senhas não coincidem!")
+    
     st.markdown('</div>', unsafe_allow_html=True)
-
-def qrcodes_page(user, supabase, escola_id):
-    st.markdown("""
-    <div class="main-header">
-        <h1>📱 QR Codes</h1>
-        <p>Gere QR codes visuais para alunos e pagamentos</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    tab1, tab2, tab3 = st.tabs(["🎓 QR Code do Aluno", "💰 QR Code de Pagamento", "📁 QR Codes Gerados"])
-    
-    with tab1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("### 🎓 Gerar QR Code do Aluno")
-        alunos = supabase.table('usuarios').select('id, nome, username, classe, turma').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
-        if alunos.data:
-            aluno_selecionado = st.selectbox("Selecione o aluno", [a['nome'] for a in alunos.data])
-            aluno = next(a for a in alunos.data if a['nome'] == aluno_selecionado)
-            if st.button("📱 Gerar QR Code", use_container_width=True):
-                with st.spinner("Gerando QR code..."):
-                    caminho = gerar_qr_code_aluno(username=aluno['username'], nome=aluno['nome'], turma=f"{aluno.get('classe', '')} {aluno.get('turma', '')}", escola_id=escola_id)
-                    if os.path.exists(caminho):
-                        st.markdown('<div class="qr-container">', unsafe_allow_html=True)
-                        st.image(caminho, caption=f"QR Code de {aluno['nome']}", use_container_width=True)
-                        st.success(f"✅ QR Code gerado para {aluno['nome']}")
-                        with open(caminho, "rb") as file:
-                            st.download_button(label="📥 Baixar QR Code", data=file, file_name=f"qr_{aluno['username']}.png", mime="image/png")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    else:
-                        st.error("Erro ao gerar QR code")
-        else:
-            st.info("Nenhum aluno cadastrado.")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("### 💰 Gerar QR Code de Pagamento")
-        alunos = supabase.table('usuarios').select('id, nome, username').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
-        if alunos.data:
-            aluno_selecionado = st.selectbox("Selecione o aluno", [a['nome'] for a in alunos.data], key="pagamento_aluno")
-            aluno = next(a for a in alunos.data if a['nome'] == aluno_selecionado)
-            col1, col2 = st.columns(2)
-            with col1:
-                valor = st.number_input("Valor (Kz)", min_value=1000, step=5000, value=50000)
-            with col2:
-                referencia = st.text_input("Referência", value=f"REF_{datetime.now().strftime('%Y%m%d%H%M')}")
-            if st.button("💳 Gerar QR Code de Pagamento", use_container_width=True):
-                with st.spinner("Gerando QR code..."):
-                    caminho = gerar_qr_code_pagamento(username=aluno['username'], nome=aluno['nome'], valor=valor, referencia=referencia)
-                    if os.path.exists(caminho):
-                        st.markdown('<div class="qr-container">', unsafe_allow_html=True)
-                        st.image(caminho, caption=f"QR Code de Pagamento - {aluno['nome']}", use_container_width=True)
-                        st.success(f"✅ QR Code de pagamento gerado para {aluno['nome']}")
-                        with open(caminho, "rb") as file:
-                            st.download_button(label="📥 Baixar QR Code de Pagamento", data=file, file_name=f"qr_pagamento_{aluno['username']}.png", mime="image/png")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    else:
-                        st.error("Erro ao gerar QR code")
-        else:
-            st.info("Nenhum aluno cadastrado.")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab3:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("### 📁 QR Codes Gerados")
-        qrcodes = listar_qr_codes()
-        if qrcodes:
-            for qr in qrcodes:
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.markdown(f"📱 **{qr}**")
-                with col2:
-                    caminho = os.path.join("qrcodes", qr)
-                    if os.path.exists(caminho):
-                        with open(caminho, "rb") as file:
-                            st.download_button(label="📥 Download", data=file, file_name=qr, mime="image/png", key=f"download_{qr}")
-                st.divider()
-        else:
-            st.info("Nenhum QR code gerado ainda.")
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================
 # MAIN
