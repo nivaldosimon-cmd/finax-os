@@ -26,32 +26,14 @@ PASTA_QRCODES = "qrcodes"
 
 # Configurações do QR Code
 QR_VERSION = 1
-QR_BOX_SIZE = 10
-QR_BORDER = 4
+QR_BOX_SIZE = 8
+QR_BORDER = 2
 QR_FILL_COLOR = "black"
 QR_BACK_COLOR = "white"
 
-# ============================================
-# CORES PARA O TERMINAL
-# ============================================
-class Cores:
-    VERDE = '\033[92m'
-    AMARELO = '\033[93m'
-    VERMELHO = '\033[91m'
-    AZUL = '\033[94m'
-    CIANO = '\033[96m'
-    RESET = '\033[0m'
-
-
-def cor_verde(texto):
-    return f"{Cores.VERDE}{texto}{Cores.RESET}"
-
-def cor_vermelho(texto):
-    return f"{Cores.VERMELHO}{texto}{Cores.RESET}"
-
 
 # ============================================
-# FUNÇÕES PRINCIPAIS
+# FUNÇÕES AUXILIARES
 # ============================================
 
 def criar_pasta_qrcodes():
@@ -60,6 +42,25 @@ def criar_pasta_qrcodes():
         os.makedirs(PASTA_QRCODES)
         print(f"📁 Pasta criada: {PASTA_QRCODES}/")
 
+
+def obter_fonte(tamanho):
+    """Tenta obter uma fonte, fallback para padrão"""
+    try:
+        # Tentar fontes comuns do sistema
+        fontes = ["arial.ttf", "DejaVuSans.ttf", "FreeSans.ttf", "Arial.ttf"]
+        for f in fontes:
+            try:
+                return ImageFont.truetype(f, tamanho)
+            except:
+                continue
+        return ImageFont.load_default()
+    except:
+        return ImageFont.load_default()
+
+
+# ============================================
+# FUNÇÕES PRINCIPAIS
+# ============================================
 
 def gerar_qr_code_aluno(username, nome, turma, escola_id):
     """
@@ -92,6 +93,10 @@ def gerar_qr_code_aluno(username, nome, turma, escola_id):
     # Criar imagem do QR code
     img_qr = qr.make_image(fill_color=QR_FILL_COLOR, back_color=QR_BACK_COLOR)
     
+    # Garantir que a imagem está em modo RGB
+    if img_qr.mode != 'RGB':
+        img_qr = img_qr.convert('RGB')
+    
     # Criar imagem final com informações do aluno
     img_final = adicionar_informacoes_aluno(img_qr, nome, turma, username)
     
@@ -99,7 +104,7 @@ def gerar_qr_code_aluno(username, nome, turma, escola_id):
     nome_arquivo = f"{PASTA_QRCODES}/aluno_{username}_{nome.replace(' ', '_')}.png"
     img_final.save(nome_arquivo, "PNG")
     
-    print(f"{cor_verde('✅')} QR Code gerado: {nome_arquivo}")
+    print(f"✅ QR Code gerado: {nome_arquivo}")
     return nome_arquivo
 
 
@@ -134,6 +139,10 @@ def gerar_qr_code_pagamento(username, nome, valor, referencia):
     # Criar imagem do QR code
     img_qr = qr.make_image(fill_color=QR_FILL_COLOR, back_color=QR_BACK_COLOR)
     
+    # Garantir que a imagem está em modo RGB
+    if img_qr.mode != 'RGB':
+        img_qr = img_qr.convert('RGB')
+    
     # Criar imagem final com informações do pagamento
     img_final = adicionar_informacoes_pagamento(img_qr, nome, valor, referencia)
     
@@ -142,27 +151,18 @@ def gerar_qr_code_pagamento(username, nome, valor, referencia):
     nome_arquivo = f"{PASTA_QRCODES}/pagamento_{username}_{data_atual}.png"
     img_final.save(nome_arquivo, "PNG")
     
-    print(f"{cor_verde('✅')} QR Code de pagamento gerado: {nome_arquivo}")
+    print(f"✅ QR Code de pagamento gerado: {nome_arquivo}")
     return nome_arquivo
 
 
 def adicionar_informacoes_aluno(img_qr, nome, turma, username):
     """
     Adiciona informações do aluno abaixo do QR code.
-    
-    Args:
-        img_qr (Image): Imagem do QR code
-        nome (str): Nome do aluno
-        turma (str): Turma do aluno
-        username (str): Username do aluno
-    
-    Returns:
-        Image: Imagem final com informações
     """
     largura_qr, altura_qr = img_qr.size
     
     # Altura adicional para o texto
-    altura_texto = 100
+    altura_texto = 120
     nova_altura = altura_qr + altura_texto
     
     # Criar nova imagem branca
@@ -173,19 +173,13 @@ def adicionar_informacoes_aluno(img_qr, nome, turma, username):
     
     # Adicionar texto
     draw = ImageDraw.Draw(img_final)
-    
-    # Tentar usar uma fonte, se disponível
-    try:
-        fonte_titulo = ImageFont.truetype("arial.ttf", 16)
-        fonte_texto = ImageFont.truetype("arial.ttf", 12)
-    except:
-        fonte_titulo = ImageFont.load_default()
-        fonte_texto = ImageFont.load_default()
+    fonte_titulo = obter_fonte(14)
+    fonte_texto = obter_fonte(11)
     
     y_texto = altura_qr + 10
     
     # Título
-    draw.text((10, y_texto), "FINAX OS - CARTÃO DE ESTUDANTE", fill='black', font=fonte_titulo)
+    draw.text((10, y_texto), "FINAX OS - CARTÃO DE ESTUDANTE", fill='#1E3A8A', font=fonte_titulo)
     
     # Nome do aluno
     y_texto += 25
@@ -210,20 +204,11 @@ def adicionar_informacoes_aluno(img_qr, nome, turma, username):
 def adicionar_informacoes_pagamento(img_qr, nome, valor, referencia):
     """
     Adiciona informações de pagamento abaixo do QR code.
-    
-    Args:
-        img_qr (Image): Imagem do QR code
-        nome (str): Nome do aluno
-        valor (float): Valor do pagamento
-        referencia (str): Referência do pagamento
-    
-    Returns:
-        Image: Imagem final com informações
     """
     largura_qr, altura_qr = img_qr.size
     
     # Altura adicional para o texto
-    altura_texto = 120
+    altura_texto = 130
     nova_altura = altura_qr + altura_texto
     
     # Criar nova imagem branca
@@ -234,21 +219,14 @@ def adicionar_informacoes_pagamento(img_qr, nome, valor, referencia):
     
     # Adicionar texto
     draw = ImageDraw.Draw(img_final)
-    
-    # Tentar usar uma fonte, se disponível
-    try:
-        fonte_titulo = ImageFont.truetype("arial.ttf", 16)
-        fonte_texto = ImageFont.truetype("arial.ttf", 12)
-        fonte_valor = ImageFont.truetype("arial.ttf", 14)
-    except:
-        fonte_titulo = ImageFont.load_default()
-        fonte_texto = ImageFont.load_default()
-        fonte_valor = ImageFont.load_default()
+    fonte_titulo = obter_fonte(14)
+    fonte_texto = obter_fonte(11)
+    fonte_valor = obter_fonte(13)
     
     y_texto = altura_qr + 10
     
     # Título
-    draw.text((10, y_texto), "FINAX PAY - COMPROVANTE DE PAGAMENTO", fill='black', font=fonte_titulo)
+    draw.text((10, y_texto), "FINAX PAY - COMPROVANTE DE PAGAMENTO", fill='#1E3A8A', font=fonte_titulo)
     
     # Nome do aluno
     y_texto += 25
@@ -284,59 +262,16 @@ def listar_qr_codes():
     return sorted(arquivos, reverse=True)
 
 
-def exibir_qr_code_no_terminal(caminho):
-    """
-    Exibe o QR code no terminal (ASCII art).
-    
-    Args:
-        caminho (str): Caminho do arquivo PNG
-    """
-    try:
-        from PIL import Image
-        import numpy as np
-        
-        img = Image.open(caminho).convert('L')
-        img = img.resize((50, 50))
-        pixels = np.array(img)
-        
-        print("\n" + "="*60)
-        print("📱 QR CODE (escaneie com o telemóvel)")
-        print("="*60)
-        
-        for row in pixels:
-            linha = ""
-            for pixel in row:
-                if pixel < 128:
-                    linha += "██"
-                else:
-                    linha += "  "
-            print(linha)
-        
-        print("="*60)
-        
-    except Exception as e:
-        print(f"Erro ao exibir QR code: {e}")
-
-
 # ============================================
 # TESTE DO MÓDULO
 # ============================================
 
 if __name__ == "__main__":
     print("🧪 Teste do módulo QR Utils")
-    print("="*50)
+    print("=" * 50)
     
-    # Gerar QR code para aluno
+    # Teste
     caminho = gerar_qr_code_aluno("joao.silva", "João Silva", "10ªA", "ESC_001")
     print(f"Arquivo: {caminho}")
     
-    # Gerar QR code para pagamento
-    caminho_pag = gerar_qr_code_pagamento("joao.silva", "João Silva", 35000, "REF_001")
-    print(f"Arquivo: {caminho_pag}")
-    
-    # Listar QR codes
-    print("\n📋 QR CODES GERADOS:")
-    for arquivo in listar_qr_codes():
-        print(f"   • {arquivo}")
-    
-    print(f"\n{cor_verde('✅ Teste concluído!')}")
+    print("\n✅ Teste concluído!")

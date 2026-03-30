@@ -1,329 +1,320 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 """
-FINAX OS - SISTEMA COMPLETO DE GESTÃO ESCOLAR
-Com sistema de Signup para Estudantes e Administradores
+================================================================================
+    FINAX OS - SISTEMA DE GESTÃO ESCOLAR
+    ============================================================================
+    Versão: 2.0 Professional
+    Autor: Nivaldo Simon
+    Descrição: Sistema completo de gestão escolar com interface de terminal
+               moderna, cores e funcionalidades avançadas.
+    Módulos: Cadastro, Presenças, Notas, Ranking, Financeiro, Biblioteca, etc.
+================================================================================
 """
 
-import sys
 import os
+import sys
 import time
 import uuid
-from datetime import datetime
+import getpass
+from datetime import datetime, timedelta
+from typing import Optional, Dict, List, Any
 
-# Adiciona a pasta raiz ao path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# ============================================================================
+# CONFIGURAÇÃO DE CORES (ANSI)
+# ============================================================================
 
-# ============================================
-# CORES SIMPLIFICADAS
-# ============================================
-class Cores:
-    VERDE = '\033[92m'
-    AMARELO = '\033[93m'
-    VERMELHO = '\033[91m'
-    AZUL = '\033[94m'
-    CIANO = '\033[96m'
-    ROXO = '\033[95m'
-    NEGRITO = '\033[1m'
+class Colors:
+    """Cores ANSI para terminal moderno"""
+    # Cores básicas
+    BLACK = '\033[30m'
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    BLUE = '\033[34m'
+    MAGENTA = '\033[35m'
+    CYAN = '\033[36m'
+    WHITE = '\033[37m'
+    
+    # Cores brilhantes
+    BRIGHT_BLACK = '\033[90m'
+    BRIGHT_RED = '\033[91m'
+    BRIGHT_GREEN = '\033[92m'
+    BRIGHT_YELLOW = '\033[93m'
+    BRIGHT_BLUE = '\033[94m'
+    BRIGHT_MAGENTA = '\033[95m'
+    BRIGHT_CYAN = '\033[96m'
+    BRIGHT_WHITE = '\033[97m'
+    
+    # Estilos
+    BOLD = '\033[1m'
+    DIM = '\033[2m'
+    ITALIC = '\033[3m'
+    UNDERLINE = '\033[4m'
+    BLINK = '\033[5m'
+    REVERSE = '\033[7m'
+    HIDDEN = '\033[8m'
+    
+    # Fundos
+    BG_BLACK = '\033[40m'
+    BG_RED = '\033[41m'
+    BG_GREEN = '\033[42m'
+    BG_YELLOW = '\033[43m'
+    BG_BLUE = '\033[44m'
+    BG_MAGENTA = '\033[45m'
+    BG_CYAN = '\033[46m'
+    BG_WHITE = '\033[47m'
+    
+    # Reset
     RESET = '\033[0m'
+    
+    @classmethod
+    def colorize(cls, text: str, color: str = WHITE, style: str = "") -> str:
+        """Aplica cor e estilo ao texto"""
+        return f"{style}{color}{text}{cls.RESET}"
 
 
-def cor_verde(texto):
-    return f"{Cores.VERDE}{texto}{Cores.RESET}"
+# ============================================================================
+# UTILITÁRIOS DE INTERFACE
+# ============================================================================
 
-def cor_vermelho(texto):
-    return f"{Cores.VERMELHO}{texto}{Cores.RESET}"
-
-def cor_amarelo(texto):
-    return f"{Cores.AMARELO}{texto}{Cores.RESET}"
-
-def cor_azul(texto):
-    return f"{Cores.AZUL}{texto}{Cores.RESET}"
-
-def cor_ciano(texto):
-    return f"{Cores.CIANO}{texto}{Cores.RESET}"
-
-
-def limpar_tela():
+def clear_screen():
     """Limpa a tela do terminal"""
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
-def mostrar_titulo(titulo):
-    """Mostra título formatado"""
-    print(f"\n{cor_azul('='*60)}")
-    print(f"{cor_azul(titulo.center(60))}")
-    print(f"{cor_azul('='*60)}")
+def print_header(title: str, subtitle: str = ""):
+    """Imprime cabeçalho estilizado"""
+    width = 70
+    print(f"\n{Colors.colorize('╔' + '═' * (width - 2) + '╗', Colors.BRIGHT_CYAN, Colors.BOLD)}")
+    print(f"{Colors.colorize('║', Colors.BRIGHT_CYAN)}{Colors.colorize(title.center(width - 2), Colors.BRIGHT_WHITE, Colors.BOLD)}{Colors.colorize('║', Colors.BRIGHT_CYAN)}")
+    if subtitle:
+        print(f"{Colors.colorize('║', Colors.BRIGHT_CYAN)}{Colors.colorize(subtitle.center(width - 2), Colors.BRIGHT_BLACK)}{Colors.colorize('║', Colors.BRIGHT_CYAN)}")
+    print(f"{Colors.colorize('╚' + '═' * (width - 2) + '╝', Colors.BRIGHT_CYAN)}")
 
 
-def mostrar_sucesso(mensagem):
-    """Mostra mensagem de sucesso"""
-    print(f"{cor_verde('✅')} {mensagem}")
+def print_success(message: str):
+    """Imprime mensagem de sucesso"""
+    print(f"{Colors.colorize('✓', Colors.GREEN, Colors.BOLD)} {message}")
 
 
-def mostrar_erro(mensagem):
-    """Mostra mensagem de erro"""
-    print(f"{cor_vermelho('❌')} {mensagem}")
+def print_error(message: str):
+    """Imprime mensagem de erro"""
+    print(f"{Colors.colorize('✗', Colors.RED, Colors.BOLD)} {message}")
 
 
-def mostrar_info(mensagem):
-    """Mostra mensagem informativa"""
-    print(f"{cor_ciano('ℹ️')} {mensagem}")
+def print_warning(message: str):
+    """Imprime mensagem de aviso"""
+    print(f"{Colors.colorize('⚠', Colors.YELLOW, Colors.BOLD)} {message}")
 
 
-def mostrar_alerta(mensagem):
-    """Mostra mensagem de alerta"""
-    print(f"{cor_amarelo('⚠️')} {mensagem}")
+def print_info(message: str):
+    """Imprime mensagem informativa"""
+    print(f"{Colors.colorize('ℹ', Colors.CYAN, Colors.BOLD)} {message}")
 
 
-def input_com_validacao(prompt, obrigatorio=True, tipo="texto", mascara=False):
-    """Input com validação básica"""
+def print_separator(char: str = "─", length: int = 70):
+    """Imprime linha separadora"""
+    print(Colors.colorize(char * length, Colors.BRIGHT_BLACK))
+
+
+def input_with_validation(prompt: str, required: bool = True, input_type: str = "text", 
+                          min_value: float = None, max_value: float = None) -> Optional[str]:
+    """
+    Input com validação
+    
+    Args:
+        prompt: Texto do prompt
+        required: Se o campo é obrigatório
+        input_type: 'text', 'number', 'email', 'phone'
+        min_value: Valor mínimo (para numbers)
+        max_value: Valor máximo (para numbers)
+    """
     while True:
-        if mascara:
-            import getpass
-            valor = getpass.getpass(prompt).strip()
-        else:
-            valor = input(prompt).strip()
+        value = input(f"{Colors.colorize(prompt, Colors.BRIGHT_CYAN)}").strip()
         
-        if obrigatorio and not valor:
-            mostrar_erro("Este campo é obrigatório!")
-            continue
-        
-        if not valor and not obrigatorio:
+        if not value and not required:
             return None
         
-        if tipo == "numero":
+        if not value and required:
+            print_error("Este campo é obrigatório!")
+            continue
+        
+        if input_type == "number":
             try:
-                return str(int(valor))
+                num = float(value)
+                if min_value is not None and num < min_value:
+                    print_error(f"Valor mínimo: {min_value}")
+                    continue
+                if max_value is not None and num > max_value:
+                    print_error(f"Valor máximo: {max_value}")
+                    continue
+                return str(num)
             except ValueError:
-                mostrar_erro("Digite um número válido!")
+                print_error("Digite um número válido!")
                 continue
         
-        return valor
+        if input_type == "email":
+            if '@' not in value or '.' not in value:
+                print_error("Email inválido!")
+                continue
+        
+        if input_type == "phone":
+            if not value.isdigit() or len(value) < 9:
+                print_error("Telefone inválido! Use apenas números (9 dígitos)")
+                continue
+        
+        return value
 
 
-def confirmar(mensagem):
-    """Pergunta confirmação ao utilizador"""
-    resposta = input(f"{cor_amarelo(mensagem)} (s/n): ").lower()
-    return resposta == 's'
+def confirm_action(message: str) -> bool:
+    """Confirma uma ação"""
+    response = input(f"{Colors.colorize(message, Colors.YELLOW)} (s/n): ").lower()
+    return response == 's'
 
 
-# ============================================
-# MÓDULOS PRINCIPAIS
-# ============================================
-from modules.database_config import db_config
-from modules.cadastro import iniciar_cadastro
-from modules.presencas import iniciar_presenca
-from modules.notas import iniciar_notas
-from modules.ranking import iniciar_ranking
-from modules.dashboard import iniciar_dashboard
-from modules.risco import iniciar_analise_risco
-from modules.financeiro import iniciar_financeiro
-from modules.financeiro_pay import iniciar_financeiro_pay
-from modules.material import iniciar_material
-from modules.denuncias import iniciar_denuncias
-from modules.alertas import iniciar_alertas, verificar_notificacoes_login
-from modules.auth import iniciar_auth
+def wait_for_enter():
+    """Aguarda o usuário pressionar ENTER"""
+    input(f"\n{Colors.colorize('Pressione ENTER para continuar...', Colors.BRIGHT_BLACK)}")
 
 
-# ============================================
-# CLASSE PRINCIPAL
-# ============================================
+# ============================================================================
+# SISTEMA DE LOGIN
+# ============================================================================
 
-class FinaXOS:
-    """Classe principal do sistema FinaX OS"""
+class AuthSystem:
+    """Sistema de autenticação"""
     
     def __init__(self):
-        self.sessao = None
-        self.supabase = db_config.get_client()
+        self.supabase = None
+        self._init_supabase()
     
-    def executar(self):
-        """Ponto de entrada principal"""
-        self._apresentacao()
-        
-        while True:
-            opcao = self._menu_login()
-            
-            if opcao == "1":
-                self.sessao = self._login()
-                if self.sessao:
-                    self._menu_principal()
-            elif opcao == "2":
-                self._signup()
-            elif opcao == "3":
-                break
-        
-        self._encerrar()
+    def _init_supabase(self):
+        """Inicializa conexão com Supabase"""
+        try:
+            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+            from modules.database_config import db_config
+            self.supabase = db_config.get_client()
+        except Exception as e:
+            print_error(f"Erro ao conectar ao Supabase: {e}")
+            sys.exit(1)
     
-    def _apresentacao(self):
-        """Apresentação inicial"""
-        limpar_tela()
+    def login(self) -> Optional[Dict]:
+        """Realiza login do usuário"""
+        clear_screen()
+        print_header("🔐 FINAX OS", "Sistema de Gestão Escolar")
         
-        print(f"{cor_azul(Cores.NEGRITO)}")
-        print("╔══════════════════════════════════════════════════════════════════╗")
-        print("║                                                                  ║")
-        print("║    ███████╗██╗███╗   ██╗ █████╗ ██╗  ██╗     ██████╗ ███████╗   ║")
-        print("║    ██╔════╝██║████╗  ██║██╔══██╗╚██╗██╔╝    ██╔═══██╗██╔════╝   ║")
-        print("║    █████╗  ██║██╔██╗ ██║███████║ ╚███╔╝     ██║   ██║███████╗   ║")
-        print("║    ██╔══╝  ██║██║╚██╗██║██╔══██║ ██╔██╗     ██║   ██║╚════██║   ║")
-        print("║    ██║     ██║██║ ╚████║██║  ██║██╔╝ ██╗    ╚██████╔╝███████║   ║")
-        print("║    ╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝     ╚═════╝ ╚══════╝   ║")
-        print("║                                                                  ║")
-        print("║                    SISTEMA DE GESTÃO ESCOLAR                     ║")
-        print("║                      Powered by FinaX AI                         ║")
-        print("╚══════════════════════════════════════════════════════════════════╝")
-        print(f"{Cores.RESET}")
+        print(f"\n{Colors.colorize('Bem-vindo! Por favor, insira suas credenciais.', Colors.BRIGHT_WHITE)}")
+        print()
         
-        time.sleep(1.5)
-    
-    def _menu_login(self):
-        """Menu inicial de login/signup"""
-        limpar_tela()
-        mostrar_titulo("🔐 FINAX OS - ACESSO")
+        attempts = 0
+        max_attempts = 3
         
-        print("\n1 - Login")
-        print("2 - Criar nova conta (Signup)")
-        print("3 - Sair")
-        
-        opcao = input_com_validacao(
-            f"\n{cor_ciano('👉 Escolha uma opção: ')}",
-            obrigatorio=True,
-            tipo="numero"
-        )
-        
-        return opcao
-    
-    def _login(self):
-        """Realiza login do utilizador"""
-        limpar_tela()
-        mostrar_titulo("🔐 LOGIN")
-        
-        tentativas = 0
-        max_tentativas = 3
-        
-        while tentativas < max_tentativas:
-            username = input_com_validacao("Username: ", obrigatorio=True)
-            password = input_com_validacao("Password: ", obrigatorio=True, mascara=True)
+        while attempts < max_attempts:
+            username = input_with_validation("Username: ", required=True)
+            password = getpass.getpass(f"{Colors.colorize('Password: ', Colors.BRIGHT_CYAN)}")
             
             try:
-                resultado = self.supabase.table('usuarios')\
+                result = self.supabase.table('usuarios')\
                     .select('*')\
                     .eq('username', username.lower())\
                     .eq('password', password)\
                     .execute()
                 
-                if resultado.data:
-                    usuario = resultado.data[0]
+                if result.data:
+                    user = result.data[0]
                     
-                    if usuario.get('status_conta') == "Bloqueada":
-                        mostrar_erro("Conta bloqueada! Contacte o administrador.")
-                        tentativas += 1
+                    if user.get('status_conta') == "Bloqueada":
+                        print_error("Conta bloqueada! Contacte o administrador.")
+                        attempts += 1
                         continue
                     
-                    mostrar_sucesso(f"Bem-vindo, {usuario['nome']}!")
+                    print_success(f"Bem-vindo, {user['nome']}!")
                     time.sleep(1)
                     
                     return {
-                        "id": usuario.get('id'),
-                        "nome": usuario.get('nome'),
-                        "username": usuario.get('username'),
-                        "nivel": usuario.get('nivel'),
-                        "escola": usuario.get('escola_id'),
-                        "classe": usuario.get('classe', 'N/A'),
-                        "turma": usuario.get('turma', 'N/A'),
-                        "curso": usuario.get('curso', 'N/A'),
-                        "tem_divida": usuario.get('tem_divida', False),
-                        "status_conta": usuario.get('status_conta', 'Ativa')
+                        "id": user.get('id'),
+                        "nome": user.get('nome'),
+                        "username": user.get('username'),
+                        "nivel": user.get('nivel'),
+                        "escola": user.get('escola_id'),
+                        "classe": user.get('classe', 'N/A'),
+                        "turma": user.get('turma', 'N/A'),
+                        "curso": user.get('curso', 'N/A'),
+                        "tem_divida": user.get('tem_divida', False),
+                        "email": user.get('email', ''),
+                        "telefone": user.get('telefone', '')
                     }
                 else:
-                    tentativas += 1
-                    restantes = max_tentativas - tentativas
-                    mostrar_erro(f"Credenciais inválidas. Tentativas restantes: {restantes}")
+                    attempts += 1
+                    remaining = max_attempts - attempts
+                    print_error(f"Credenciais inválidas. Tentativas restantes: {remaining}")
                     time.sleep(1)
                     
             except Exception as e:
-                mostrar_erro(f"Erro: {e}")
-                tentativas += 1
+                print_error(f"Erro: {e}")
+                attempts += 1
         
-        mostrar_erro("Número máximo de tentativas excedido.")
+        print_error("Número máximo de tentativas excedido.")
         return None
     
-    def _signup(self):
-        """Menu de criação de nova conta"""
-        limpar_tela()
-        mostrar_titulo("📝 CRIAR NOVA CONTA")
+    def signup(self) -> Optional[Dict]:
+        """Cria nova conta"""
+        clear_screen()
+        print_header("📝 Criar Nova Conta", "Junte-se ao FinaX OS")
         
-        print("\n1 - Sou Administrador (Criar Escola)")
-        print("2 - Sou Estudante (Juntar-me a uma Escola)")
-        print("3 - Voltar")
+        print(f"\n{Colors.colorize('1 - Sou Administrador (Criar Escola)', Colors.BRIGHT_WHITE)}")
+        print(f"{Colors.colorize('2 - Sou Estudante (Juntar-me a uma Escola)', Colors.BRIGHT_WHITE)}")
+        print(f"{Colors.colorize('0 - Voltar', Colors.BRIGHT_BLACK)}")
         
-        opcao = input_com_validacao(
-            f"\n{cor_ciano('👉 Escolha uma opção: ')}",
-            obrigatorio=True,
-            tipo="numero"
-        )
+        option = input_with_validation("\nEscolha: ", required=True, input_type="number")
         
-        if opcao == "1":
-            self._signup_admin()
-        elif opcao == "2":
-            self._signup_estudante()
+        if option == "0":
+            return None
+        elif option == "1":
+            return self._signup_admin()
+        elif option == "2":
+            return self._signup_student()
+        else:
+            print_error("Opção inválida!")
+            return None
     
-    def _signup_admin(self):
-        """Cadastro de novo administrador e criação de escola"""
-        limpar_tela()
-        mostrar_titulo("🏫 CADASTRO DE ADMINISTRADOR / ESCOLA")
+    def _signup_admin(self) -> Optional[Dict]:
+        """Cadastro de administrador e escola"""
+        clear_screen()
+        print_header("🏫 Cadastro de Administrador / Escola")
         
-        mostrar_info("Vamos criar a sua conta de administrador e a sua escola.")
-        print()
+        print(f"\n{Colors.colorize('DADOS DA ESCOLA', Colors.BRIGHT_CYAN, Colors.BOLD)}")
+        print_separator()
         
-        # Dados da escola
-        escola_nome = input_com_validacao("Nome da Escola: ", obrigatorio=True)
-        escola_endereco = input_com_validacao("Endereço da Escola: ", obrigatorio=True)
-        escola_telefone = input_com_validacao("Telefone da Escola: ", obrigatorio=True)
-        escola_email = input_com_validacao("Email da Escola: ", obrigatorio=True)
+        escola_nome = input_with_validation("Nome da Escola: ", required=True)
+        escola_endereco = input_with_validation("Endereço: ", required=True)
+        escola_telefone = input_with_validation("Telefone: ", required=True, input_type="phone")
+        escola_email = input_with_validation("Email da Escola: ", required=True, input_type="email")
         
-        # Gerar ID único da escola
-        escola_id = f"ESC_{uuid.uuid4().hex[:8].upper()}"
+        print(f"\n{Colors.colorize('DADOS DO ADMINISTRADOR', Colors.BRIGHT_CYAN, Colors.BOLD)}")
+        print_separator()
         
-        # Dados do administrador
-        print(f"\n{cor_azul('='*50)}")
-        print("👤 DADOS DO ADMINISTRADOR")
-        print(f"{cor_azul('='*50)}")
-        
-        nome = input_com_validacao("Nome completo: ", obrigatorio=True)
-        username = input_com_validacao("Username: ", obrigatorio=True)
-        password = input_com_validacao("Password: ", obrigatorio=True, mascara=True)
-        email = input_com_validacao("Email: ", obrigatorio=True)
-        telefone = input_com_validacao("Telefone: ", obrigatorio=True)
+        nome = input_with_validation("Nome completo: ", required=True)
+        username = input_with_validation("Username: ", required=True)
+        password = getpass.getpass(f"{Colors.colorize('Password: ', Colors.BRIGHT_CYAN)}")
+        email = input_with_validation("Email: ", required=True, input_type="email")
+        telefone = input_with_validation("Telefone: ", required=True, input_type="phone")
         
         # Confirmar
-        print(f"\n{cor_azul('='*50)}")
-        print("📋 CONFIRMAÇÃO")
-        print(f"{cor_azul('='*50)}")
+        print(f"\n{Colors.colorize('CONFIRMAÇÃO', Colors.BRIGHT_YELLOW, Colors.BOLD)}")
+        print_separator()
         print(f"Escola: {escola_nome}")
-        print(f"ID da Escola: {cor_ciano(escola_id)}")
         print(f"Administrador: {nome}")
         print(f"Username: {username}")
         
-        if not confirmar("\nConfirmar criação da conta?"):
-            mostrar_info("Cadastro cancelado.")
-            return
+        if not confirm_action("\nConfirmar criação da conta?"):
+            print_info("Cadastro cancelado.")
+            return None
         
         try:
-            # 1. Criar escola (tabela escolas)
-            try:
-                # Verificar se tabela escolas existe
-                self.supabase.table('escolas').select('count').limit(1).execute()
-            except:
-                # Criar tabela escolas se não existir
-                self.supabase.table('escolas').insert({
-                    "id": escola_id,
-                    "nome": escola_nome,
-                    "endereco": escola_endereco,
-                    "telefone": escola_telefone,
-                    "email": escola_email,
-                    "data_criacao": datetime.now().isoformat()
-                }).execute()
-            
-            # 2. Criar administrador
+            escola_id = f"ESC_{uuid.uuid4().hex[:8].upper()}"
             admin_id = str(uuid.uuid4())
             
             dados_admin = {
@@ -344,13 +335,14 @@ class FinaXOS:
             
             self.supabase.table('usuarios').insert(dados_admin).execute()
             
-            mostrar_sucesso("✅ Conta criada com sucesso!")
-            mostrar_info(f"ID da Escola: {cor_ciano(escola_id)}")
-            mostrar_info(f"Username: {username}")
-            mostrar_info("Guarde estas informações!")
+            print_success("Conta criada com sucesso!")
+            print_info(f"ID da Escola: {Colors.colorize(escola_id, Colors.BRIGHT_GREEN)}")
+            print_info(f"Username: {Colors.colorize(username, Colors.BRIGHT_GREEN)}")
+            print_warning("Guarde estas informações!")
             
-            # Fazer login automático
-            self.sessao = {
+            wait_for_enter()
+            
+            return {
                 "id": admin_id,
                 "nome": nome,
                 "username": username.lower(),
@@ -360,29 +352,26 @@ class FinaXOS:
                 "turma": "GERAL",
                 "curso": "ADMINISTRAÇÃO",
                 "tem_divida": False,
-                "status_conta": "Ativa"
+                "email": email,
+                "telefone": telefone
             }
             
-            time.sleep(2)
-            self._menu_principal()
-            
         except Exception as e:
-            mostrar_erro(f"Erro ao criar conta: {e}")
+            print_error(f"Erro ao criar conta: {e}")
+            return None
     
-    def _signup_estudante(self):
-        """Cadastro de novo estudante"""
-        limpar_tela()
-        mostrar_titulo("🎓 CADASTRO DE ESTUDANTE")
+    def _signup_student(self) -> Optional[Dict]:
+        """Cadastro de estudante"""
+        clear_screen()
+        print_header("🎓 Cadastro de Estudante")
         
-        mostrar_info("Para se juntar a uma escola, precisa do ID da escola fornecido pelo administrador.")
+        print(f"\n{Colors.colorize('Para se juntar a uma escola, precisa do ID fornecido pelo administrador.', Colors.BRIGHT_WHITE)}")
         print()
         
-        escola_id = input_com_validacao("ID da Escola: ", obrigatorio=True)
+        escola_id = input_with_validation("ID da Escola: ", required=True)
         
         # Verificar se escola existe
         try:
-            # Tentar buscar escola (simplificado - pode criar tabela escolas depois)
-            # Por enquanto, verificamos se existe algum admin com este escola_id
             escola_existe = self.supabase.table('usuarios')\
                 .select('escola_id')\
                 .eq('escola_id', escola_id)\
@@ -390,49 +379,44 @@ class FinaXOS:
                 .execute()
             
             if not escola_existe.data:
-                mostrar_erro("Escola não encontrada! Verifique o ID e tente novamente.")
-                return
+                print_error("Escola não encontrada!")
+                return None
             
-            print(f"\n{cor_azul('='*50)}")
-            print("👤 DADOS DO ESTUDANTE")
-            print(f"{cor_azul('='*50)}")
+            print(f"\n{Colors.colorize('DADOS PESSOAIS', Colors.BRIGHT_CYAN, Colors.BOLD)}")
+            print_separator()
             
-            nome = input_com_validacao("Nome completo: ", obrigatorio=True)
-            username = input_com_validacao("Username: ", obrigatorio=True)
-            password = input_com_validacao("Password: ", obrigatorio=True, mascara=True)
-            email = input_com_validacao("Email: ", obrigatorio=True)
-            telefone = input_com_validacao("Telefone: ", obrigatorio=True)
+            nome = input_with_validation("Nome completo: ", required=True)
+            username = input_with_validation("Username: ", required=True)
+            password = getpass.getpass(f"{Colors.colorize('Password: ', Colors.BRIGHT_CYAN)}")
+            email = input_with_validation("Email: ", required=True, input_type="email")
+            telefone = input_with_validation("Telefone: ", required=True, input_type="phone")
             
-            print(f"\n{cor_azul('='*50)}")
-            print("📚 DADOS ACADÉMICOS")
-            print(f"{cor_azul('='*50)}")
+            print(f"\n{Colors.colorize('DADOS ACADÉMICOS', Colors.BRIGHT_CYAN, Colors.BOLD)}")
+            print_separator()
             
-            classe = input_com_validacao("Classe (ex: 10ª, 11ª, 12ª): ", obrigatorio=True)
-            turma = input_com_validacao("Turma (ex: A, B, C): ", obrigatorio=True)
-            curso = input_com_validacao("Curso (ex: Ciências, Humanidades): ", obrigatorio=True)
+            classe = input_with_validation("Classe (ex: 10ª, 11ª, 12ª): ", required=True)
+            turma = input_with_validation("Turma (ex: A, B, C): ", required=True)
+            curso = input_with_validation("Curso (ex: Ciências, Humanidades): ", required=True)
             
             # Confirmar
-            print(f"\n{cor_azul('='*50)}")
-            print("📋 CONFIRMAÇÃO")
-            print(f"{cor_azul('='*50)}")
+            print(f"\n{Colors.colorize('CONFIRMAÇÃO', Colors.BRIGHT_YELLOW, Colors.BOLD)}")
+            print_separator()
             print(f"Escola ID: {escola_id}")
             print(f"Nome: {nome}")
             print(f"Username: {username}")
-            print(f"Classe/Turma: {classe} / {turma}")
+            print(f"Classe/Turma: {classe}/{turma}")
             
-            if not confirmar("\nConfirmar cadastro?"):
-                mostrar_info("Cadastro cancelado.")
-                return
+            if not confirm_action("\nConfirmar cadastro?"):
+                print_info("Cadastro cancelado.")
+                return None
             
             # Verificar se username já existe
             existe = self.supabase.table('usuarios').select('id').eq('username', username.lower()).execute()
             if existe.data:
-                mostrar_erro("Username já existe! Escolha outro.")
-                return
+                print_error("Username já existe!")
+                return None
             
-            # Criar estudante
             estudante_id = str(uuid.uuid4())
-            
             dados_estudante = {
                 "id": estudante_id,
                 "username": username.lower(),
@@ -451,26 +435,12 @@ class FinaXOS:
             
             self.supabase.table('usuarios').insert(dados_estudante).execute()
             
-            # Criar registo na tabela alunos
-            aluno_id = str(uuid.uuid4())
-            dados_aluno = {
-                "id": aluno_id,
-                "username_ligacao": username.lower(),
-                "nome": nome,
-                "turma": f"{classe}{turma}",
-                "escola_id": escola_id
-            }
+            print_success(f"Estudante {nome} cadastrado com sucesso!")
+            print_info(f"Username: {username}")
             
-            try:
-                self.supabase.table('alunos').insert(dados_aluno).execute()
-            except:
-                pass  # Tabela alunos pode não existir ainda
+            wait_for_enter()
             
-            mostrar_sucesso(f"✅ Estudante {nome} cadastrado com sucesso!")
-            mostrar_info(f"Username: {username}")
-            
-            # Fazer login automático
-            self.sessao = {
+            return {
                 "id": estudante_id,
                 "nome": nome,
                 "username": username.lower(),
@@ -480,255 +450,485 @@ class FinaXOS:
                 "turma": turma,
                 "curso": curso,
                 "tem_divida": True,
-                "status_conta": "Ativa"
+                "email": email,
+                "telefone": telefone
             }
             
-            time.sleep(2)
-            self._menu_principal()
-            
         except Exception as e:
-            mostrar_erro(f"Erro ao cadastrar: {e}")
+            print_error(f"Erro ao cadastrar: {e}")
+            return None
+
+
+# ============================================================================
+# MÓDULOS DO SISTEMA (INTEGRAÇÃO)
+# ============================================================================
+
+class FinaXOS:
+    """Classe principal do sistema FinaX OS"""
     
-    def _menu_principal(self):
-        """Menu principal conforme perfil"""
-        nivel = self.sessao.get('nivel')
-        nome = self.sessao.get('nome')
-        escola_id = self.sessao.get('escola')
-        
-        # Verificar notificações
+    def __init__(self):
+        self.session = None
+        self.supabase = None
+        self._init_modules()
+    
+    def _init_modules(self):
+        """Inicializa módulos"""
         try:
-            verificar_notificacoes_login(self.sessao)
-        except:
-            pass
+            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+            from modules.database_config import db_config
+            self.supabase = db_config.get_client()
+        except Exception as e:
+            print_error(f"Erro ao carregar módulos: {e}")
+            sys.exit(1)
+    
+    def run(self):
+        """Executa o sistema"""
+        auth = AuthSystem()
         
         while True:
-            limpar_tela()
+            clear_screen()
+            print_header("🏫 FINAX OS", "Sistema Inteligente de Gestão Escolar")
             
-            print(f"{cor_azul('='*60)}")
-            print(f"{cor_azul('🏫 FINAX OS - SISTEMA DE GESTÃO ESCOLAR'.center(60))}")
-            print(f"{cor_azul('='*60)}")
-            print(f"👤 Utilizador: {cor_ciano(nome)}")
-            print(f"🎯 Nível: {cor_ciano(nivel)}")
-            print(f"🏛️ Escola ID: {cor_ciano(escola_id)}")
-            print(f"{cor_azul('='*60)}")
+            print(f"\n{Colors.colorize('1 - Login', Colors.BRIGHT_WHITE)}")
+            print(f"{Colors.colorize('2 - Criar Conta', Colors.BRIGHT_WHITE)}")
+            print(f"{Colors.colorize('0 - Sair', Colors.BRIGHT_BLACK)}")
+            
+            option = input_with_validation("\nEscolha: ", required=True, input_type="number")
+            
+            if option == "0":
+                self._exit()
+                break
+            elif option == "1":
+                self.session = auth.login()
+                if self.session:
+                    self._main_menu()
+            elif option == "2":
+                self.session = auth.signup()
+                if self.session:
+                    self._main_menu()
+            else:
+                print_error("Opção inválida!")
+                wait_for_enter()
+    
+    def _main_menu(self):
+        """Menu principal"""
+        while True:
+            clear_screen()
+            
+            nivel = self.session['nivel']
+            nome = self.session['nome']
+            escola_id = self.session['escola']
+            
+            print_header(f"📊 MENU PRINCIPAL", f"Bem-vindo, {nome}")
+            
+            print(f"\n{Colors.colorize(f'🎯 Nível: {nivel}', Colors.BRIGHT_CYAN)}")
+            print(f"{Colors.colorize(f'🏛️ Escola ID: {escola_id}', Colors.BRIGHT_BLACK)}")
+            print_separator()
             
             if nivel == "Administrador":
                 self._menu_admin()
             else:
-                self._menu_estudante()
+                self._menu_student()
             
-            print(f"\n{cor_amarelo('0 - Sair do sistema')}")
+            print_separator()
+            print(f"{Colors.colorize('0 - Sair do Sistema', Colors.BRIGHT_BLACK)}")
             
-            opcao = input_com_validacao(
-                f"\n{cor_ciano('👉 Escolha uma opção: ')}",
-                obrigatorio=True,
-                tipo="numero"
-            )
+            option = input_with_validation("\n👉 Escolha uma opção: ", required=True, input_type="number")
             
-            if opcao == "0":
+            if option == "0":
                 break
             
-            self._executar_opcao(opcao, nivel, escola_id)
+            self._execute_option(option, nivel, escola_id)
+        
+        self.session = None
     
     def _menu_admin(self):
-        """Menu para administradores"""
-        print(f"\n{cor_verde('📋 MENU ADMINISTRADOR')}")
-        print(f"{cor_verde('-'*40)}")
-        print("""
- 1 - 📝 Cadastro de Utilizadores
- 2 - 📍 Controlo de Presenças (QR Code)
- 3 - 📊 Gestão de Notas
- 4 - 🏆 Ranking de Alunos
- 5 - 📈 Dashboard Administrativo
- 6 - ⚠️ Análise de Risco
- 7 - 💰 Gestão Financeira (ERP)
- 8 - 💵 FinaX Pay (Pagamentos)
- 9 - 📚 Biblioteca Digital (Materiais)
-10 - 🕊️ Canal de Ética (Denúncias)
-11 - 🔔 Gestão de Alertas
-12 - 🔐 Segurança (Alterar Senha)
-13 - ⚙️ Configurações
-        """)
+        """Menu do administrador"""
+        print(f"\n{Colors.colorize('📋 MÓDULOS DISPONÍVEIS', Colors.BRIGHT_GREEN, Colors.BOLD)}")
+        print()
+        print(" 1 - 📝 Cadastro de Utilizadores")
+        print(" 2 - 📍 Controlo de Presenças")
+        print(" 3 - 📊 Gestão de Notas")
+        print(" 4 - 🏆 Ranking de Alunos")
+        print(" 5 - 📈 Dashboard Administrativo")
+        print(" 6 - ⚠️ Análise de Risco")
+        print(" 7 - 💰 Gestão Financeira (ERP)")
+        print(" 8 - 💵 FinaX Pay (Pagamentos)")
+        print(" 9 - 📚 Biblioteca Digital")
+        print("10 - 🕊️ Canal de Ética")
+        print("11 - 🔔 Gestão de Alertas")
+        print("12 - 🔐 Segurança (Alterar Senha)")
+        print("13 - ⚙️ Configurações")
     
-    def _menu_estudante(self):
-        """Menu para estudantes"""
-        print(f"\n{cor_verde('📋 MENU ESTUDANTE')}")
-        print(f"{cor_verde('-'*40)}")
-        print("""
- 1 - 📍 Registrar Presença (QR Code)
- 2 - 📊 Ver Minhas Notas (Boletim)
- 3 - 🏆 Ver Ranking da Escola
- 4 - 📚 Biblioteca Digital
- 5 - 🕊️ Canal de Ética (Denúncias)
- 6 - 🔐 Alterar Minha Senha
-        """)
+    def _menu_student(self):
+        """Menu do estudante"""
+        print(f"\n{Colors.colorize('📋 MÓDULOS DISPONÍVEIS', Colors.BRIGHT_GREEN, Colors.BOLD)}")
+        print()
+        print(" 1 - 📍 Registrar Presença")
+        print(" 2 - 📊 Ver Minhas Notas")
+        print(" 3 - 🏆 Ver Ranking da Escola")
+        print(" 4 - 📚 Biblioteca Digital")
+        print(" 5 - 🕊️ Canal de Ética")
+        print(" 6 - 🔐 Alterar Minha Senha")
     
-    def _executar_opcao(self, opcao, nivel, escola_id):
+    def _execute_option(self, option: str, nivel: str, escola_id: str):
         """Executa a opção escolhida"""
-        if nivel == "Administrador":
-            self._executar_opcao_admin(opcao, escola_id)
+        try:
+            if nivel == "Administrador":
+                self._execute_admin_option(option, escola_id)
+            else:
+                self._execute_student_option(option)
+        except Exception as e:
+            print_error(f"Erro: {e}")
+            wait_for_enter()
+    
+    def _execute_admin_option(self, option: str, escola_id: str):
+        """Executa opções do administrador"""
+        if option == "1":
+            self._module_cadastro(escola_id)
+        elif option == "2":
+            self._module_presencas(escola_id)
+        elif option == "3":
+            self._module_notas(escola_id)
+        elif option == "4":
+            self._module_ranking(escola_id)
+        elif option == "5":
+            self._module_dashboard(escola_id)
+        elif option == "6":
+            self._module_risco(escola_id)
+        elif option == "7":
+            self._module_financeiro(escola_id)
+        elif option == "8":
+            self._module_financeiro_pay(escola_id)
+        elif option == "9":
+            self._module_material(escola_id)
+        elif option == "10":
+            self._module_denuncias()
+        elif option == "11":
+            self._module_alertas()
+        elif option == "12":
+            self._module_auth()
+        elif option == "13":
+            self._module_config(escola_id)
         else:
-            self._executar_opcao_estudante(opcao)
+            print_error("Opção inválida!")
+            wait_for_enter()
     
-    def _executar_opcao_admin(self, opcao, escola_id):
-        """Executa opções do menu administrador"""
-        try:
-            if opcao == "1":
-                iniciar_cadastro(escola_id)
-            elif opcao == "2":
-                iniciar_presenca(escola_id)
-            elif opcao == "3":
-                iniciar_notas(escola_id)
-            elif opcao == "4":
-                iniciar_ranking(escola_id)
-            elif opcao == "5":
-                iniciar_dashboard(escola_id)
-            elif opcao == "6":
-                iniciar_analise_risco(escola_id)
-            elif opcao == "7":
-                iniciar_financeiro(escola_id)
-            elif opcao == "8":
-                iniciar_financeiro_pay(escola_id)
-            elif opcao == "9":
-                iniciar_material(self.sessao)
-            elif opcao == "10":
-                iniciar_denuncias(self.sessao)
-            elif opcao == "11":
-                iniciar_alertas(self.sessao)
-            elif opcao == "12":
-                iniciar_auth(self.sessao)
-            elif opcao == "13":
-                self._configuracoes_admin()
-            else:
-                mostrar_erro("Opção inválida!")
-        except Exception as e:
-            mostrar_erro(f"Erro: {e}")
+    def _execute_student_option(self, option: str):
+        """Executa opções do estudante"""
+        aluno_id = self.session['id']
+        escola_id = self.session['escola']
         
-        input(f"\n{cor_amarelo('Pressione ENTER para continuar...')}")
+        if option == "1":
+            self._registrar_presenca(aluno_id, escola_id)
+        elif option == "2":
+            self._ver_boletim(aluno_id)
+        elif option == "3":
+            self._ver_ranking(escola_id)
+        elif option == "4":
+            self._module_material(escola_id)
+        elif option == "5":
+            self._module_denuncias()
+        elif option == "6":
+            self._module_auth()
+        else:
+            print_error("Opção inválida!")
+            wait_for_enter()
     
-    def _executar_opcao_estudante(self, opcao):
-        """Executa opções do menu estudante"""
-        try:
-            aluno_id = self.sessao.get('id')
-            escola_id = self.sessao.get('escola')
-            
-            if opcao == "1":
-                from modules.presencas import ControloPresenca
-                presenca = ControloPresenca()
-                qr_data = input_com_validacao("Digite o código do QR (ou username): ")
-                if qr_data:
-                    presenca.registar_entrada(qr_data, escola_id)
-            elif opcao == "2":
-                from modules.notas import GestaoNotas
-                notas = GestaoNotas()
-                notas.ver_boletim(aluno_id)
-            elif opcao == "3":
-                from modules.ranking import RankingSistema
-                ranking = RankingSistema()
-                ranking.exibir_top_10(escola_id)
-            elif opcao == "4":
-                iniciar_material(self.sessao)
-            elif opcao == "5":
-                iniciar_denuncias(self.sessao)
-            elif opcao == "6":
-                iniciar_auth(self.sessao)
-            else:
-                mostrar_erro("Opção inválida!")
-        except Exception as e:
-            mostrar_erro(f"Erro: {e}")
-        
-        input(f"\n{cor_amarelo('Pressione ENTER para continuar...')}")
+    # ========================================================================
+    # MÓDULOS (INTEGRAÇÃO COM OS ARQUIVOS EXISTENTES)
+    # ========================================================================
     
-    def _configuracoes_admin(self):
-        """Configurações do administrador"""
-        limpar_tela()
-        mostrar_titulo("⚙️ CONFIGURAÇÕES")
-        
-        print("1 - 📊 Estatísticas do Sistema")
-        print("2 - 🔑 Gerenciar Contas")
-        print("3 - ⬅️ Voltar")
-        
-        opcao = input_com_validacao(
-            f"\n{cor_ciano('Escolha: ')}",
-            obrigatorio=True,
-            tipo="numero"
-        )
-        
-        if opcao == "1":
-            self._estatisticas_sistema()
-        elif opcao == "2":
-            self._gerenciar_contas()
-        input("\nPressione ENTER para continuar...")
-    
-    def _estatisticas_sistema(self):
-        """Exibe estatísticas"""
-        mostrar_titulo("📊 ESTATÍSTICAS")
+    def _module_cadastro(self, escola_id: str):
+        """Módulo de cadastro"""
+        clear_screen()
+        print_header("📝 Cadastro de Utilizadores")
         
         try:
-            escola_id = self.sessao.get('escola')
-            
-            # Total de alunos
+            from modules.cadastro import iniciar_cadastro
+            iniciar_cadastro(escola_id)
+        except ImportError:
+            print_warning("Módulo de cadastro não disponível.")
+            wait_for_enter()
+    
+    def _module_presencas(self, escola_id: str):
+        """Módulo de presenças"""
+        clear_screen()
+        print_header("📍 Controlo de Presenças")
+        
+        try:
+            from modules.presencas import iniciar_presenca
+            iniciar_presenca(escola_id)
+        except ImportError:
+            print_warning("Módulo de presenças não disponível.")
+            wait_for_enter()
+    
+    def _module_notas(self, escola_id: str):
+        """Módulo de notas"""
+        clear_screen()
+        print_header("📊 Gestão de Notas")
+        
+        try:
+            from modules.notas import iniciar_notas
+            iniciar_notas(escola_id)
+        except ImportError:
+            print_warning("Módulo de notas não disponível.")
+            wait_for_enter()
+    
+    def _module_ranking(self, escola_id: str):
+        """Módulo de ranking"""
+        clear_screen()
+        print_header("🏆 Ranking de Alunos")
+        
+        try:
+            from modules.ranking import iniciar_ranking
+            iniciar_ranking(escola_id)
+        except ImportError:
+            print_warning("Módulo de ranking não disponível.")
+            wait_for_enter()
+    
+    def _module_dashboard(self, escola_id: str):
+        """Módulo dashboard"""
+        clear_screen()
+        print_header("📈 Dashboard Administrativo")
+        
+        try:
+            from modules.dashboard import iniciar_dashboard
+            iniciar_dashboard(escola_id)
+        except ImportError:
+            print_warning("Módulo dashboard não disponível.")
+            wait_for_enter()
+    
+    def _module_risco(self, escola_id: str):
+        """Módulo de análise de risco"""
+        clear_screen()
+        print_header("⚠️ Análise de Risco")
+        
+        try:
+            from modules.risco import iniciar_analise_risco
+            iniciar_analise_risco(escola_id)
+        except ImportError:
+            print_warning("Módulo de risco não disponível.")
+            wait_for_enter()
+    
+    def _module_financeiro(self, escola_id: str):
+        """Módulo financeiro ERP"""
+        clear_screen()
+        print_header("💰 Gestão Financeira (ERP)")
+        
+        try:
+            from modules.financeiro import iniciar_financeiro
+            iniciar_financeiro(escola_id)
+        except ImportError:
+            print_warning("Módulo financeiro não disponível.")
+            wait_for_enter()
+    
+    def _module_financeiro_pay(self, escola_id: str):
+        """Módulo FinaX Pay"""
+        clear_screen()
+        print_header("💵 FinaX Pay - Pagamentos")
+        
+        try:
+            from modules.financeiro_pay import iniciar_financeiro_pay
+            iniciar_financeiro_pay(escola_id)
+        except ImportError:
+            print_warning("Módulo FinaX Pay não disponível.")
+            wait_for_enter()
+    
+    def _module_material(self, escola_id: str):
+        """Módulo biblioteca digital"""
+        clear_screen()
+        print_header("📚 Biblioteca Digital")
+        
+        try:
+            from modules.material import iniciar_material
+            iniciar_material(self.session)
+        except ImportError:
+            print_warning("Módulo biblioteca não disponível.")
+            wait_for_enter()
+    
+    def _module_denuncias(self):
+        """Módulo canal de ética"""
+        clear_screen()
+        print_header("🕊️ Canal de Ética")
+        
+        try:
+            from modules.denuncias import iniciar_denuncias
+            iniciar_denuncias(self.session)
+        except ImportError:
+            print_warning("Módulo de denúncias não disponível.")
+            wait_for_enter()
+    
+    def _module_alertas(self):
+        """Módulo de alertas"""
+        clear_screen()
+        print_header("🔔 Gestão de Alertas")
+        
+        try:
+            from modules.alertas import iniciar_alertas
+            iniciar_alertas(self.session)
+        except ImportError:
+            print_warning("Módulo de alertas não disponível.")
+            wait_for_enter()
+    
+    def _module_auth(self):
+        """Módulo de segurança"""
+        clear_screen()
+        print_header("🔐 Segurança")
+        
+        try:
+            from modules.auth import iniciar_auth
+            iniciar_auth(self.session)
+        except ImportError:
+            print_warning("Módulo de segurança não disponível.")
+            wait_for_enter()
+    
+    def _module_config(self, escola_id: str):
+        """Módulo de configurações"""
+        clear_screen()
+        print_header("⚙️ Configurações")
+        
+        print(f"\n{Colors.colorize('1 - Estatísticas do Sistema', Colors.BRIGHT_WHITE)}")
+        print(f"{Colors.colorize('2 - Gerenciar Contas', Colors.BRIGHT_WHITE)}")
+        print(f"{Colors.colorize('0 - Voltar', Colors.BRIGHT_BLACK)}")
+        
+        option = input_with_validation("\nEscolha: ", required=True, input_type="number")
+        
+        if option == "1":
+            self._estatisticas_sistema(escola_id)
+        elif option == "2":
+            self._gerenciar_contas(escola_id)
+        
+        wait_for_enter()
+    
+    def _estatisticas_sistema(self, escola_id: str):
+        """Exibe estatísticas do sistema"""
+        clear_screen()
+        print_header("📊 Estatísticas do Sistema")
+        
+        try:
             alunos = self.supabase.table('usuarios').select('*', count='exact').eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
             total_alunos = alunos.count
             
-            # Total de professores/admins
-            admins = self.supabase.table('usuarios').select('*', count='exact').eq('escola_id', escola_id).eq('nivel', 'Administrador').execute()
-            total_admins = admins.count
+            professores = self.supabase.table('usuarios').select('*', count='exact').eq('escola_id', escola_id).eq('nivel', 'Administrador').execute()
+            total_professores = professores.count
             
-            print(f"\n🏛️ Escola ID: {cor_ciano(escola_id)}")
-            print(f"👥 Total de Alunos: {total_alunos}")
-            print(f"👨‍💼 Total de Administradores: {total_admins}")
+            print(f"\n👥 Total de Alunos: {Colors.colorize(str(total_alunos), Colors.BRIGHT_GREEN)}")
+            print(f"👨‍🏫 Total de Administradores: {Colors.colorize(str(total_professores), Colors.BRIGHT_CYAN)}")
             
         except Exception as e:
-            mostrar_erro(f"Erro: {e}")
+            print_error(f"Erro: {e}")
     
-    def _gerenciar_contas(self):
-        """Gerenciar contas"""
-        mostrar_titulo("🔑 GERENCIAR CONTAS")
+    def _gerenciar_contas(self, escola_id: str):
+        """Gerencia contas de utilizadores"""
+        clear_screen()
+        print_header("🔑 Gerenciar Contas")
         
         try:
-            escola_id = self.sessao.get('escola')
-            
-            resultado = self.supabase.table('usuarios')\
+            usuarios = self.supabase.table('usuarios')\
                 .select('username, nome, nivel, status_conta')\
                 .eq('escola_id', escola_id)\
                 .execute()
             
-            if resultado.data:
+            if usuarios.data:
                 from tabulate import tabulate
-                print(f"\n{tabulate(resultado.data, headers='keys', tablefmt='grid')}")
+                print(f"\n{tabulate(usuarios.data, headers='keys', tablefmt='grid')}")
             else:
-                mostrar_info("Nenhum utilizador encontrado.")
+                print_info("Nenhum utilizador encontrado.")
                 
         except Exception as e:
-            mostrar_erro(f"Erro: {e}")
+            print_error(f"Erro: {e}")
     
-    def _encerrar(self):
+    def _registrar_presenca(self, aluno_id: str, escola_id: str):
+        """Registra presença do aluno"""
+        clear_screen()
+        print_header("📍 Registrar Presença")
+        
+        print(f"\n{Colors.colorize('Digite o código QR (ou username) do aluno', Colors.BRIGHT_WHITE)}")
+        qr_code = input_with_validation("Código: ", required=True)
+        
+        try:
+            aluno = self.supabase.table('usuarios')\
+                .select('*')\
+                .eq('username', qr_code)\
+                .eq('escola_id', escola_id)\
+                .eq('nivel', 'Estudante')\
+                .execute()
+            
+            if aluno.data:
+                aluno_data = aluno.data[0]
+                agora = datetime.now()
+                hora = agora.strftime("%H:%M:%S")
+                data = agora.strftime("%Y-%m-%d")
+                status = "ATRASADO" if agora.hour > 7 or (agora.hour == 7 and agora.minute > 30) else "PRESENTE"
+                
+                presenca_id = str(uuid.uuid4())
+                self.supabase.table('presencas').insert({
+                    "id": presenca_id,
+                    "aluno_id": aluno_data['id'],
+                    "aluno_username": qr_code,
+                    "nome_aluno": aluno_data['nome'],
+                    "escola_id": escola_id,
+                    "data": data,
+                    "hora_entrada": hora,
+                    "status": status
+                }).execute()
+                
+                print_success(f"{aluno_data['nome']} - {status} às {hora}")
+            else:
+                print_error("Aluno não encontrado!")
+                
+        except Exception as e:
+            print_error(f"Erro: {e}")
+        
+        wait_for_enter()
+    
+    def _ver_boletim(self, aluno_id: str):
+        """Ver boletim do aluno"""
+        clear_screen()
+        print_header("📋 Boletim Escolar")
+        
+        try:
+            from modules.notas import GestaoNotas
+            notas = GestaoNotas()
+            notas.ver_boletim(aluno_id)
+        except ImportError:
+            print_warning("Módulo de notas não disponível.")
+        
+        wait_for_enter()
+    
+    def _ver_ranking(self, escola_id: str):
+        """Ver ranking da escola"""
+        clear_screen()
+        print_header("🏆 Ranking da Escola")
+        
+        try:
+            from modules.ranking import RankingSistema
+            ranking = RankingSistema()
+            ranking.exibir_top_10(escola_id)
+        except ImportError:
+            print_warning("Módulo de ranking não disponível.")
+        
+        wait_for_enter()
+    
+    def _exit(self):
         """Encerra o sistema"""
-        limpar_tela()
-        
-        print(f"{cor_verde(Cores.NEGRITO)}")
-        print("╔══════════════════════════════════════════════════════════════════╗")
-        print("║                                                                  ║")
-        print("║  👋 OBRIGADO POR UTILIZAR O FINAX OS!  👋                        ║")
-        print("║                                                                  ║")
-        print("║  Volte sempre!                                                   ║")
-        print("║                                                                  ║")
-        print("╚══════════════════════════════════════════════════════════════════╝")
-        print(f"{Cores.RESET}")
-        
+        clear_screen()
+        print_header("👋 FINAX OS", "Obrigado por utilizar o sistema!")
+        print(f"\n{Colors.colorize('Volte sempre!', Colors.BRIGHT_GREEN)}")
         time.sleep(2)
 
 
-# ============================================
-# PONTO DE ENTRADA
-# ============================================
+# ============================================================================
+# PONTO DE ENTRADA PRINCIPAL
+# ============================================================================
 
 if __name__ == "__main__":
     try:
-        sistema = FinaXOS()
-        sistema.executar()
+        app = FinaXOS()
+        app.run()
     except KeyboardInterrupt:
-        print(f"\n\n{cor_amarelo('Sistema interrompido pelo utilizador.')}")
+        print(f"\n\n{Colors.colorize('Sistema interrompido pelo utilizador.', Colors.YELLOW)}")
     except Exception as e:
-        print(f"\n\n{cor_vermelho(f'Erro inesperado: {e}')}") 
+        print(f"\n\n{Colors.colorize(f'Erro inesperado: {e}', Colors.RED)}")
+        sys.exit(1)
