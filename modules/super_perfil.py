@@ -1,298 +1,264 @@
 """
-MÓDULO SUPER PERFIL - FINAX OS
-Sistema de gestão escolar com Supabase Cloud
-
-Funcionalidade:
-- Autenticação de utilizadores (login)
-- Carregamento de sessão com dados completos
-- Gestão de perfis (Estudante / Administrador)
+MÓDULO SUPER PERFIL - UMBRELLA AI
+Sistema de autenticação com níveis de administrador e segurança SHA-256
 """
 
 import sys
 import os
 import time
+import uuid
+import hashlib
+from datetime import datetime
 
-# Adiciona a pasta raiz ao path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# ============================================
-# IMPORTAÇÕES
-# ============================================
 from modules.database_config import db_config
 
 # ============================================
-# CORES SIMPLIFICADAS
+# CORES E UTILITÁRIOS
 # ============================================
-class Cores:
+class Colors:
     VERDE = '\033[92m'
     AMARELO = '\033[93m'
     VERMELHO = '\033[91m'
     AZUL = '\033[94m'
     CIANO = '\033[96m'
-    NEGRITO = '\033[1m'
     RESET = '\033[0m'
+    NEGRITO = '\033[1m'
 
 
-def cor_verde(texto):
-    return f"{Cores.VERDE}{texto}{Cores.RESET}"
-
-def cor_vermelho(texto):
-    return f"{Cores.VERMELHO}{texto}{Cores.RESET}"
-
-def cor_amarelo(texto):
-    return f"{Cores.AMARELO}{texto}{Cores.RESET}"
-
-def cor_azul(texto):
-    return f"{Cores.AZUL}{texto}{Cores.RESET}"
-
-def cor_ciano(texto):
-    return f"{Cores.CIANO}{texto}{Cores.RESET}"
+def cor_verde(t): return f"{Colors.VERDE}{t}{Colors.RESET}"
+def cor_vermelho(t): return f"{Colors.VERMELHO}{t}{Colors.RESET}"
+def cor_amarelo(t): return f"{Colors.AMARELO}{t}{Colors.RESET}"
+def cor_azul(t): return f"{Colors.AZUL}{t}{Colors.RESET}"
+def cor_ciano(t): return f"{Colors.CIANO}{t}{Colors.RESET}"
 
 
 def limpar_tela():
-    """Limpa a tela do terminal"""
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
 def mostrar_titulo(titulo):
-    """Mostra título formatado"""
-    print(f"\n{cor_azul('='*50)}")
-    print(f"{cor_azul(titulo)}")
-    print(f"{cor_azul('='*50)}")
+    print(f"\n{cor_azul('='*60)}")
+    print(f"{cor_azul(titulo.center(60))}")
+    print(f"{cor_azul('='*60)}")
 
 
-def mostrar_sucesso(mensagem):
-    """Mostra mensagem de sucesso"""
-    print(f"{cor_verde('✅')} {mensagem}")
+def mostrar_sucesso(m): print(f"{cor_verde('✅')} {m}")
+def mostrar_erro(m): print(f"{cor_vermelho('❌')} {m}")
+def mostrar_info(m): print(f"{cor_ciano('ℹ️')} {m}")
+def mostrar_alerta(m): print(f"{cor_amarelo('⚠️')} {m}")
 
 
-def mostrar_erro(mensagem):
-    """Mostra mensagem de erro"""
-    print(f"{cor_vermelho('❌')} {mensagem}")
+def input_com_validacao(prompt, obrigatorio=True, tipo="texto", mascara=False):
+    while True:
+        if mascara:
+            import getpass
+            valor = getpass.getpass(prompt).strip()
+        else:
+            valor = input(prompt).strip()
+        if obrigatorio and not valor:
+            mostrar_erro("Campo obrigatório!")
+            continue
+        if not valor and not obrigatorio:
+            return None
+        if tipo == "numero":
+            try:
+                return str(int(valor))
+            except:
+                mostrar_erro("Digite um número válido!")
+                continue
+        if tipo == "email":
+            if '@' not in valor or '.' not in valor:
+                mostrar_erro("Email inválido!")
+                continue
+        if tipo == "phone":
+            if not valor.isdigit() or len(valor) < 9:
+                mostrar_erro("Telefone inválido! 9 dígitos")
+                continue
+        return valor
 
 
-def mostrar_info(mensagem):
-    """Mostra mensagem informativa"""
-    print(f"{cor_ciano('ℹ️')} {mensagem}")
+def confirmar(mensagem):
+    resposta = input(f"{cor_amarelo(mensagem)} (s/n): ").lower()
+    return resposta == 's'
 
 
 # ============================================
-# CLASSE SUPER PERFIL
+# CLASSE PRINCIPAL
 # ============================================
 
 class SuperPerfil:
-    """
-    Classe responsável pela autenticação e carregamento de sessão.
-    """
-    
     def __init__(self):
-        """Inicializa o módulo com conexão ao banco de dados"""
         self.supabase = db_config.get_client()
         self.usuario_logado = None
-    
+
+    def _hash_senha(self, senha):
+        return hashlib.sha256(senha.encode()).hexdigest()
+
+    def _verificar_senha(self, senha, hash_armazenado):
+        return self._hash_senha(senha) == hash_armazenado
+
     def fazer_login(self, username, password):
-        """
-        Realiza a autenticação do utilizador.
-        
-        Args:
-            username (str): Nome de utilizador
-            password (str): Senha
-        
-        Returns:
-            dict or None: Dicionário com dados do utilizador
-        """
         username_limpo = username.lower().strip()
-        
         if not username_limpo or not password:
             mostrar_erro("Username e password são obrigatórios!")
             return None
-        
+
         try:
-            # Buscar utilizador
             resultado = self.supabase.table('usuarios')\
                 .select('*')\
                 .eq('username', username_limpo)\
-                .eq('password', password)\
                 .execute()
-            
-            if not resultado.data or len(resultado.data) == 0:
+
+            if not resultado.data:
                 mostrar_erro("Username ou password incorretos!")
                 return None
-            
+
             usuario = resultado.data[0]
-            
-            # Verificar status da conta
+
+            if not self._verificar_senha(password, usuario.get('password', '')):
+                mostrar_erro("Username ou password incorretos!")
+                return None
+
             if usuario.get('status_conta') == "Bloqueada":
                 mostrar_erro("Conta bloqueada! Contacte o administrador.")
                 return None
-            
-            # Dados da sessão
+
             dados_sessao = {
-                "id": usuario.get("id"),
-                "nome": usuario.get("nome"),
-                "username": usuario.get("username"),
-                "nivel": usuario.get("nivel"),
-                "escola": usuario.get("escola_id"),
-                "classe": usuario.get("classe", "N/A"),
-                "turma": usuario.get("turma", "N/A"),
-                "curso": usuario.get("curso", "N/A"),
-                "tem_divida": usuario.get("tem_divida", False),
-                "status_conta": usuario.get("status_conta", "Ativa"),
-                "email": usuario.get("email", ""),
-                "telefone": usuario.get("telefone", "")
+                "id": usuario.get('id'),
+                "nome": usuario.get('nome'),
+                "username": usuario.get('username'),
+                "nivel": usuario.get('nivel'),
+                "sub_nivel": usuario.get('sub_nivel', ''),
+                "escola": usuario.get('escola_id'),
+                "classe": usuario.get('classe', 'N/A'),
+                "turma": usuario.get('turma', 'N/A'),
+                "curso": usuario.get('curso', 'N/A'),
+                "tem_divida": usuario.get('tem_divida', False),
+                "email": usuario.get('email', ''),
+                "telefone": usuario.get('telefone', ''),
+                "qrcode_id": usuario.get('qrcode_id', ''),
+                "iban": usuario.get('iban', ''),
+                "iban_nome": usuario.get('iban_nome', '')
             }
-            
+
             self.usuario_logado = dados_sessao
             self._exibir_boas_vindas(dados_sessao)
-            
             return dados_sessao
-            
+
         except Exception as e:
-            mostrar_erro(f"Erro ao realizar login: {e}")
+            mostrar_erro(f"Erro: {e}")
             return None
-    
-    def _exibir_boas_vindas(self, dados_sessao):
-        """Exibe mensagem de boas-vindas"""
-        nome = dados_sessao.get("nome", "Utilizador")
-        nivel = dados_sessao.get("nivel", "")
-        
+
+    def _exibir_boas_vindas(self, dados):
+        nome = dados.get('nome', 'Utilizador')
+        nivel = dados.get('nivel', '')
+        sub_nivel = dados.get('sub_nivel', '')
+
         limpar_tela()
-        mostrar_titulo("FINAX OS - SISTEMA DE GESTÃO ESCOLAR")
-        
+        mostrar_titulo("UMBRELLA AI - SISTEMA DE GESTÃO ESCOLAR")
+
         print(f"\n{cor_verde('╔════════════════════════════════════════════════════════════╗')}")
         print(f"{cor_verde(f'║  🎉 BEM-VINDO(A), {nome.upper()}!  🎉')}")
         print(f"{cor_verde('╚════════════════════════════════════════════════════════════╝')}")
-        
+
         print(f"\n{cor_azul('📋 PERFIL')}")
-        print(f"   • Nível: {cor_ciano(nivel)}")
-        print(f"   • Username: {dados_sessao.get('username')}")
-        print(f"   • Escola ID: {dados_sessao.get('escola')}")
-        
+        print(f"   • Nível: {cor_ciano(nivel)}{f' ({sub_nivel})' if sub_nivel else ''}")
+        print(f"   • Username: {dados.get('username')}")
+        print(f"   • Escola ID: {cor_ciano(dados.get('escola'))}")
+
+        if dados.get('iban'):
+            print(f"   • IBAN: {cor_verde(dados.get('iban'))}")
+            print(f"   • Titular: {dados.get('iban_nome')}")
+
+        if dados.get('qrcode_id'):
+            print(f"   • QR Code ID: {cor_verde(dados.get('qrcode_id'))}")
+
         if nivel == "Estudante":
             print(f"\n{cor_azul('📚 DADOS ACADÉMICOS')}")
-            print(f"   • Classe: {dados_sessao.get('classe', 'N/A')}")
-            print(f"   • Turma: {dados_sessao.get('turma', 'N/A')}")
-            print(f"   • Curso: {dados_sessao.get('curso', 'N/A')}")
-            
-            if dados_sessao.get('tem_divida'):
-                print(f"   • Status Financeiro: {cor_vermelho('DÉBITO PENDENTE')}")
-            else:
-                print(f"   • Status Financeiro: {cor_verde('EM DIA')}")
-        
+            print(f"   • Classe: {dados.get('classe', 'N/A')}")
+            print(f"   • Turma: {dados.get('turma', 'N/A')}")
+            print(f"   • Curso: {dados.get('curso', 'N/A')}")
+            status = "DÉBITO PENDENTE" if dados.get('tem_divida') else "EM DIA"
+            cor_status = cor_vermelho if dados.get('tem_divida') else cor_verde
+            print(f"   • Status Financeiro: {cor_status(status)}")
+
         print(f"\n{cor_azul('═'*60)}")
-        from datetime import datetime
         print(f"{cor_amarelo(f'⏰ {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}')}")
-    
-    def get_usuario_logado(self):
-        """Retorna o utilizador logado"""
-        return self.usuario_logado
-    
-    def is_autenticado(self):
-        """Verifica se há utilizador autenticado"""
-        return self.usuario_logado is not None
-    
+
+    def get_usuario(self): return self.usuario_logado
+    def is_autenticado(self): return self.usuario_logado is not None
+    def is_admin(self): return self.usuario_logado and self.usuario_logado.get('nivel') == 'Administrador'
+    def is_super_admin(self): return self.usuario_logado and self.usuario_logado.get('sub_nivel') == 'SuperAdmin'
+
     def logout(self):
-        """Realiza logout"""
         if self.usuario_logado:
-            nome = self.usuario_logado.get("nome", "Utilizador")
-            mostrar_info(f"Até logo, {nome}!")
+            mostrar_info(f"Até logo, {self.usuario_logado.get('nome')}!")
             self.usuario_logado = None
 
 
-# ============================================
-# FUNÇÃO DE LOGIN PARA O TERMINAL
-# ============================================
-
 def iniciar_login():
-    """
-    Função de integração para ser chamada pelo main.py (terminal).
-    
-    Returns:
-        dict or None: Dados da sessão se login bem-sucedido
-    """
     limpar_tela()
-    mostrar_titulo("🔐 FINAX OS - LOGIN")
-    
-    print(f"\n{cor_ciano('Por favor, insira as suas credenciais de acesso.')}")
-    print()
-    
+    mostrar_titulo("🔐 UMBRELLA AI - LOGIN")
+    print(f"\n{cor_ciano('Por favor, insira as suas credenciais.')}\n")
+
     tentativas = 0
-    max_tentativas = 3
     perfil = SuperPerfil()
-    
-    while tentativas < max_tentativas:
-        username = input("Username: ").strip()
-        password = input("Password: ").strip()
-        
+
+    while tentativas < 3:
+        username = input_com_validacao("Username: ", obrigatorio=True)
+        password = input_com_validacao("Password: ", obrigatorio=True, mascara=True)
+
         sessao = perfil.fazer_login(username, password)
-        
         if sessao:
             return sessao
-        else:
-            tentativas += 1
-            restantes = max_tentativas - tentativas
-            if restantes > 0:
-                mostrar_info(f"Tentativas restantes: {restantes}")
-                time.sleep(1)
-    
+
+        tentativas += 1
+        if tentativas < 3:
+            mostrar_info(f"Tentativas restantes: {3 - tentativas}")
+            time.sleep(1)
+
     mostrar_erro("Número máximo de tentativas excedido.")
     return None
 
 
-# ============================================
-# FUNÇÃO DE LOGIN SIMPLES PARA O FRONTEND (STREAMLIT)
-# ============================================
-
 def iniciar_login_simples(username, password):
-    """
-    Função de login simplificada para ser usada pelo frontend Streamlit.
-    
-    Args:
-        username (str): Nome de utilizador
-        password (str): Senha
-    
-    Returns:
-        dict or None: Dados do utilizador se sucesso, None se falha
-    """
     try:
         supabase = db_config.get_client()
-        
-        resultado = supabase.table('usuarios')\
-            .select('*')\
-            .eq('username', username.lower())\
-            .eq('password', password)\
-            .execute()
-        
+        resultado = supabase.table('usuarios').select('*').eq('username', username.lower()).execute()
+
         if not resultado.data:
             return None
-        
+
         usuario = resultado.data[0]
-        
+        senha_hash = hashlib.sha256(password.encode()).hexdigest()
+
+        if usuario.get('password') != senha_hash:
+            return None
+        if usuario.get('status_conta') == "Bloqueada":
+            return None
+
         return {
             "id": usuario.get('id'),
-            "username": usuario.get('username'),
             "nome": usuario.get('nome'),
+            "username": usuario.get('username'),
             "nivel": usuario.get('nivel'),
+            "sub_nivel": usuario.get('sub_nivel', ''),
             "escola": usuario.get('escola_id'),
-            "status_conta": usuario.get('status_conta'),
             "classe": usuario.get('classe', 'N/A'),
             "turma": usuario.get('turma', 'N/A'),
             "curso": usuario.get('curso', 'N/A'),
             "tem_divida": usuario.get('tem_divida', False),
             "email": usuario.get('email', ''),
-            "telefone": usuario.get('telefone', '')
+            "telefone": usuario.get('telefone', ''),
+            "qrcode_id": usuario.get('qrcode_id', ''),
+            "iban": usuario.get('iban', ''),
+            "iban_nome": usuario.get('iban_nome', '')
         }
-    except Exception as e:
-        print(f"Erro ao fazer login: {e}")
+    except Exception:
         return None
 
 
-# ============================================
-# TESTE DO MÓDULO
-# ============================================
-
 if __name__ == "__main__":
-    print("🧪 Teste do módulo Super Perfil")
-    print("⚠️ Para testar, execute o main.py")
-    print("   Ou utilize: perfil = SuperPerfil()")
-    print("   sessao = perfil.fazer_login('username', 'password')")
+    print("🧪 Módulo Super Perfil carregado")

@@ -1,458 +1,321 @@
 """
-MÓDULO CADASTRO - FINAX OS
-Sistema de gestão escolar com Supabase Cloud
-
-Arquitetura:
-- Cadastro inteligente: Estudante vs Administrador
-- Double Insert: usuarios + alunos (para estudantes)
-- Geração automática de QR Code para estudantes
+MÓDULO CADASTRO - UMBRELLA AI
+Sistema de cadastro com ID da Escola, IBAN e encarregados de educação
 """
 
-from datetime import datetime
 import sys
 import os
 import uuid
+import hashlib
+from datetime import datetime
 
-# Adiciona a pasta raiz ao path para importar módulos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# ============================================
-# IMPORTAÇÕES DOS MÓDULOS INTERNOS
-# ============================================
 from modules.database_config import db_config
-from utils.interface import Interface
-from utils import qr_utils
+from utils.qr_utils import gerar_qr_code_aluno
 
 # ============================================
-# CONSTANTES
+# CORES E UTILITÁRIOS
 # ============================================
+class Colors:
+    VERDE = '\033[92m'; AMARELO = '\033[93m'; VERMELHO = '\033[91m'
+    AZUL = '\033[94m'; CIANO = '\033[96m'; RESET = '\033[0m'
 
-# Níveis de utilizador
-NIVEL_ESTUDANTE = "Estudante"
-NIVEL_ADMIN = "Administrador"
 
-# Valores padrão para Administrador
-ADMIN_CLASSE = "DIREÇÃO"
-ADMIN_TURMA = "GERAL"
-ADMIN_CURSO = "ADMINISTRAÇÃO"
-ADMIN_DIVIDA = False
+def cor_verde(t): return f"{Colors.VERDE}{t}{Colors.RESET}"
+def cor_vermelho(t): return f"{Colors.VERMELHO}{t}{Colors.RESET}"
+def cor_amarelo(t): return f"{Colors.AMARELO}{t}{Colors.RESET}"
+def cor_azul(t): return f"{Colors.AZUL}{t}{Colors.RESET}"
+def cor_ciano(t): return f"{Colors.CIANO}{t}{Colors.RESET}"
 
-# Valores padrão para Estudante
-ESTUDANTE_DIVIDA = True
+
+def limpar_tela(): os.system('cls' if os.name == 'nt' else 'clear')
+def mostrar_titulo(t): print(f"\n{cor_azul('='*60)}\n{cor_azul(t.center(60))}\n{cor_azul('='*60)}")
+def mostrar_sucesso(m): print(f"{cor_verde('✅')} {m}")
+def mostrar_erro(m): print(f"{cor_vermelho('❌')} {m}")
+def mostrar_info(m): print(f"{cor_ciano('ℹ️')} {m}")
+def mostrar_alerta(m): print(f"{cor_amarelo('⚠️')} {m}")
+
+
+def input_com_validacao(prompt, obrigatorio=True, tipo="texto"):
+    while True:
+        valor = input(prompt).strip()
+        if obrigatorio and not valor:
+            mostrar_erro("Campo obrigatório!")
+            continue
+        if not valor and not obrigatorio:
+            return None
+        if tipo == "numero":
+            try:
+                return str(int(valor))
+            except:
+                mostrar_erro("Digite um número válido!")
+                continue
+        if tipo == "email":
+            if '@' not in valor or '.' not in valor:
+                mostrar_erro("Email inválido!")
+                continue
+        return valor
+
+
+def confirmar(mensagem):
+    resposta = input(f"{cor_amarelo(mensagem)} (s/n): ").lower()
+    return resposta == 's'
 
 
 # ============================================
-# CLASSE PRINCIPAL DE CADASTRO
+# CLASSE DE CADASTRO
 # ============================================
 
 class Cadastro:
-    """
-    Classe responsável pelo cadastro de utilizadores no sistema FinaX OS
-    
-    Funcionalidades:
-    - Cadastro de Estudantes (com Classe, Turma, Curso e QR Code)
-    - Cadastro de Administradores (dados simplificados)
-    - Double Insert: usuarios + alunos (apenas para estudantes)
-    - Tratamento de duplicidade de username
-    """
-    
     def __init__(self):
-        """Inicializa o módulo de cadastro com conexão ao banco de dados"""
         self.supabase = db_config.get_client()
-        self.interface = Interface()
-    
-    # ============================================
-    # 1. VALIDAÇÕES E UTILITÁRIOS
-    # ============================================
-    
-    def _validar_username_unico(self, username):
-        """
-        Verifica se o username já existe no banco de dados
-        
-        Args:
-            username (str): Username a ser verificado
-            
-        Returns:
-            bool: True se único, False se já existe
-        """
+
+    def _hash_senha(self, senha):
+        return hashlib.sha256(senha.encode()).hexdigest()
+
+    def _gerar_qrcode_id(self, escola_id):
         try:
-            resposta = self.supabase.table('usuarios')\
-                .select('username')\
-                .eq('username', username)\
+            ultimo = self.supabase.table('usuarios')\
+                .select('qrcode_id')\
+                .eq('escola_id', escola_id)\
+                .not_.is_('qrcode_id', 'null')\
+                .order('qrcode_id', desc=True)\
+                .limit(1)\
                 .execute()
-            
-            return len(resposta.data) == 0
-            
-        except Exception as e:
-            self.interface.mostrar_erro(f"Erro ao validar username: {e}")
-            return False
-    
-    def _gerar_uuid(self):
-        """Gera um UUID único para o registro"""
-        return str(uuid.uuid4())
-    
-    def _tratar_erro_duplicado(self, error):
-        """
-        Trata erro de chave duplicada (PostgreSQL code 23505)
-        
-        Args:
-            error: Objeto de erro do Supabase
-            
-        Returns:
-            bool: True se foi erro de duplicidade, False caso contrário
-        """
-        if hasattr(error, 'code') and error.code == '23505':
-            self.interface.mostrar_erro("Este username já está em uso. Por favor, escolha outro.")
-            return True
-        return False
-    
-    # ============================================
-    # 2. CADASTRO DE ESTUDANTE
-    # ============================================
-    
-    def _cadastrar_estudante(self, dados_basicos, escola_id):
-        """
-        Cadastra um novo estudante no sistema (Double Insert)
-        
-        Args:
-            dados_basicos (dict): Dados comuns (username, password, nome)
-            escola_id (str): ID da escola do administrador
-            
-        Returns:
-            dict: Dados do estudante cadastrado ou None se erro
-        """
-        self.interface.mostrar_titulo("CADASTRO DE ESTUDANTE")
-        
-        # Coletar dados específicos do estudante
-        print(self.interface.cores.azul("\n📚 DADOS ACADÉMICOS"))
-        
-        classe = self.interface.input_com_validação(
-            "Classe (ex: 10ª, 11ª, 12ª): ",
-            obrigatorio=True
-        )
-        
-        turma = self.interface.input_com_validação(
-            "Turma (ex: A, B, C): ",
-            obrigatorio=True
-        )
-        
-        curso = self.interface.input_com_validação(
-            "Curso (ex: Ciências, Humanidades): ",
-            obrigatorio=True
-        )
-        
-        # Confirmar dados
-        self.interface.mostrar_info("\n📋 CONFIRMAÇÃO DOS DADOS")
-        print(f"   Nome: {dados_basicos['nome']}")
-        print(f"   Username: {dados_basicos['username']}")
-        print(f"   Classe: {classe}")
-        print(f"   Turma: {turma}")
-        print(f"   Curso: {curso}")
-        
-        if not self.interface.confirmar("Deseja cadastrar este estudante?"):
-            self.interface.mostrar_info("Cadastro cancelado.")
+            if ultimo.data and ultimo.data[0]['qrcode_id']:
+                return str(int(ultimo.data[0]['qrcode_id']) + 1)
+            return "1001"
+        except:
+            return "1001"
+
+    def criar_escola(self):
+        limpar_tela()
+        mostrar_titulo("🏫 CRIAÇÃO DE NOVA ESCOLA")
+
+        print(f"\n{cor_ciano('DADOS DA ESCOLA')}")
+        print("-" * 40)
+        escola_nome = input_com_validacao("Nome da Escola: ", obrigatorio=True)
+        escola_endereco = input_com_validacao("Endereço: ", obrigatorio=True)
+        escola_telefone = input_com_validacao("Telefone: ", obrigatorio=True)
+        escola_email = input_com_validacao("Email: ", obrigatorio=True, tipo="email")
+
+        print(f"\n{cor_ciano('DADOS BANCÁRIOS (IBAN)')}")
+        print("-" * 40)
+        iban = input_com_validacao("IBAN (ex: AO06.0066.0000.1234.5678.9012.3): ", obrigatorio=True)
+        iban_nome = input_com_validacao("Nome do Titular da Conta: ", obrigatorio=True)
+
+        print(f"\n{cor_ciano('DADOS DO SUPER ADMINISTRADOR')}")
+        print("-" * 40)
+        nome = input_com_validacao("Nome completo: ", obrigatorio=True)
+        username = input_com_validacao("Username: ", obrigatorio=True).lower()
+        password = input_com_validacao("Password: ", obrigatorio=True)
+        email = input_com_validacao("Email: ", obrigatorio=True, tipo="email")
+        telefone = input_com_validacao("Telefone: ", obrigatorio=True)
+
+        print(f"\n{cor_azul('='*40)}")
+        print("Confirmação:")
+        print(f"Escola: {escola_nome}")
+        print(f"IBAN: {iban}")
+        print(f"Admin: {nome}")
+        if not confirmar("\nConfirmar criação da escola?"):
+            mostrar_info("Cancelado.")
             return None
-        
-        # Gerar UUIDs
-        usuario_id = self._gerar_uuid()
-        aluno_id = self._gerar_uuid()
-        
-        # Dados para tabela usuarios
-        dados_usuario = {
-            "id": usuario_id,
-            "username": dados_basicos['username'],
-            "password": dados_basicos['password'],
-            "nivel": NIVEL_ESTUDANTE,
-            "nome": dados_basicos['nome'],
-            "escola_id": escola_id,
-            "classe": classe,
-            "turma": turma,
-            "curso": curso,
-            "tem_divida": ESTUDANTE_DIVIDA
-        }
-        
-        # Dados para tabela alunos
-        dados_aluno = {
-            "id": aluno_id,
-            "username_ligacao": dados_basicos['username'],
-            "nome": dados_basicos['nome'],
-            "turma": f"{classe}{turma}",
-            "escola_id": escola_id
-        }
-        
+
         try:
-            # 1. Inserir na tabela usuarios
-            self.interface.mostrar_processando("Registando dados do estudante...")
-            resultado_usuario = self.supabase.table('usuarios').insert(dados_usuario).execute()
-            
-            # 2. Inserir na tabela alunos (apenas para estudantes)
-            self.interface.mostrar_processando("Registando dados académicos...")
-            resultado_aluno = self.supabase.table('alunos').insert(dados_aluno).execute()
-            
-            # 3. Gerar QR Code
-            self.interface.mostrar_processando("Gerando QR Code...")
-            qr_code_path = qr_utils.gerar_qr_code(
-                dados_basicos['username'],
-                dados_basicos['nome'],
-                f"{classe}{turma}"
-            )
-            
-            # 4. Sucesso!
-            self.interface.mostrar_sucesso("Estudante cadastrado com sucesso!")
-            self.interface.mostrar_info(f"📱 QR Code salvo em: {qr_code_path}")
-            
-            return {
-                "usuario": resultado_usuario.data[0] if resultado_usuario.data else None,
-                "aluno": resultado_aluno.data[0] if resultado_aluno.data else None,
-                "qr_code": qr_code_path
+            escola_id = f"ESC_{uuid.uuid4().hex[:8].upper()}"
+            admin_id = str(uuid.uuid4())
+            senha_hash = self._hash_senha(password)
+
+            dados_admin = {
+                "id": admin_id, "username": username, "password": senha_hash,
+                "nivel": "Administrador", "sub_nivel": "SuperAdmin", "nome": nome,
+                "email": email, "telefone": telefone, "escola_id": escola_id,
+                "classe": "DIREÇÃO", "turma": "GERAL", "curso": "ADMINISTRAÇÃO",
+                "tem_divida": False, "status_conta": "Ativa", "iban": iban,
+                "iban_nome": iban_nome, "created_at": datetime.now().isoformat()
             }
-            
+
+            self.supabase.table('usuarios').insert(dados_admin).execute()
+
+            mostrar_sucesso("Escola criada com sucesso!")
+            mostrar_info(f"ID da Escola: {cor_ciano(escola_id)}")
+            mostrar_info(f"IBAN: {cor_verde(iban)}")
+            mostrar_info(f"Username: {username}")
+            return dados_admin
         except Exception as e:
-            if self._tratar_erro_duplicado(e):
-                return None
-            self.interface.mostrar_erro(f"Erro ao cadastrar estudante: {e}")
+            mostrar_erro(f"Erro: {e}")
             return None
-    
-    # ============================================
-    # 3. CADASTRO DE ADMINISTRADOR
-    # ============================================
-    
-    def _cadastrar_administrador(self, dados_basicos, escola_id):
-        """
-        Cadastra um novo administrador no sistema
-        
-        Args:
-            dados_basicos (dict): Dados comuns (username, password, nome)
-            escola_id (str): ID da escola
-            
-        Returns:
-            dict: Dados do administrador cadastrado ou None se erro
-        """
-        self.interface.mostrar_titulo("CADASTRO DE ADMINISTRADOR")
-        
-        # Confirmar dados
-        self.interface.mostrar_info("\n📋 CONFIRMAÇÃO DOS DADOS")
-        print(f"   Nome: {dados_basicos['nome']}")
-        print(f"   Username: {dados_basicos['username']}")
-        print(f"   Nível: Administrador")
-        
-        if not self.interface.confirmar("Deseja cadastrar este administrador?"):
-            self.interface.mostrar_info("Cadastro cancelado.")
+
+    def criar_admin(self, escola_id, admin_nivel="Admin"):
+        limpar_tela()
+        mostrar_titulo("👨‍💼 CADASTRO DE ADMINISTRADOR")
+        print(f"\n{cor_ciano(f'Escola ID: {escola_id}')}\n")
+
+        nome = input_com_validacao("Nome completo: ", obrigatorio=True)
+        username = input_com_validacao("Username: ", obrigatorio=True).lower()
+        password = input_com_validacao("Password: ", obrigatorio=True)
+        email = input_com_validacao("Email: ", obrigatorio=True, tipo="email")
+        telefone = input_com_validacao("Telefone: ", obrigatorio=True)
+
+        if not confirmar(f"\nConfirmar cadastro de {nome}?"):
             return None
-        
-        # Gerar UUID
-        usuario_id = self._gerar_uuid()
-        
-        # Dados para tabela usuarios
-        dados_usuario = {
-            "id": usuario_id,
-            "username": dados_basicos['username'],
-            "password": dados_basicos['password'],
-            "nivel": NIVEL_ADMIN,
-            "nome": dados_basicos['nome'],
-            "escola_id": escola_id,
-            "classe": ADMIN_CLASSE,
-            "turma": ADMIN_TURMA,
-            "curso": ADMIN_CURSO,
-            "tem_divida": ADMIN_DIVIDA
-        }
-        
+
         try:
-            # Inserir na tabela usuarios
-            self.interface.mostrar_processando("Registando administrador...")
-            resultado = self.supabase.table('usuarios').insert(dados_usuario).execute()
-            
-            self.interface.mostrar_sucesso("Administrador cadastrado com sucesso!")
-            
-            return {
-                "usuario": resultado.data[0] if resultado.data else None,
-                "aluno": None
+            admin_id = str(uuid.uuid4())
+            dados_admin = {
+                "id": admin_id, "username": username, "password": self._hash_senha(password),
+                "nivel": "Administrador", "sub_nivel": admin_nivel, "nome": nome,
+                "email": email, "telefone": telefone, "escola_id": escola_id,
+                "classe": "DIREÇÃO", "turma": "GERAL", "curso": "ADMINISTRAÇÃO",
+                "tem_divida": False, "status_conta": "Ativa",
+                "created_at": datetime.now().isoformat()
             }
-            
+            self.supabase.table('usuarios').insert(dados_admin).execute()
+            mostrar_sucesso(f"Admin {nome} cadastrado!")
+            mostrar_info(f"Username: {username}")
+            return dados_admin
         except Exception as e:
-            if self._tratar_erro_duplicado(e):
-                return None
-            self.interface.mostrar_erro(f"Erro ao cadastrar administrador: {e}")
+            mostrar_erro(f"Erro: {e}")
             return None
-    
-    # ============================================
-    # 4. CADASTRO PRINCIPAL (PONTO DE ENTRADA)
-    # ============================================
-    
-    def cadastrar(self, escola_id):
-        """
-        Ponto de entrada principal para cadastro de utilizadores
-        
-        Args:
-            escola_id (str): ID da escola do administrador logado
-            
-        Returns:
-            dict: Dados do utilizador cadastrado ou None se cancelado
-        """
-        self.interface.limpar_tela()
-        self.interface.mostrar_titulo("FINAX OS - SISTEMA DE GESTÃO ESCOLAR")
-        self.interface.mostrar_info("Bem-vindo ao módulo de cadastro de utilizadores.\n")
-        
-        # 1. Escolher tipo de utilizador
-        tipo = self.interface.menu_opcoes(
-            "TIPO DE UTILIZADOR",
-            [
-                "Estudante",
-                "Administrador",
-                "Cancelar"
-            ]
-        )
-        
-        if tipo == 3:  # Cancelar
-            self.interface.mostrar_info("Cadastro cancelado.")
+
+    def criar_estudante(self, escola_id):
+        limpar_tela()
+        mostrar_titulo("🎓 CADASTRO DE ESTUDANTE")
+        print(f"\n{cor_ciano(f'Escola ID: {escola_id}')}\n")
+
+        # Dados pessoais
+        print(f"{cor_ciano('DADOS PESSOAIS')}")
+        nome = input_com_validacao("Nome completo: ", obrigatorio=True)
+        username = input_com_validacao("Username: ", obrigatorio=True).lower()
+        password = input_com_validacao("Password: ", obrigatorio=True)
+        email = input_com_validacao("Email: ", obrigatorio=True, tipo="email")
+        telefone = input_com_validacao("Telefone: ", obrigatorio=True)
+        data_nascimento = input_com_validacao("Data Nascimento (dd/mm/aaaa): ", obrigatorio=True)
+
+        # Dados académicos
+        print(f"\n{cor_ciano('DADOS ACADÉMICOS')}")
+        classe = input_com_validacao("Classe (ex: 10ª, 11ª, 12ª): ", obrigatorio=True)
+        turma = input_com_validacao("Turma (ex: A, B, C): ", obrigatorio=True)
+        curso = input_com_validacao("Curso (ex: Ciências, Humanidades): ", obrigatorio=True)
+
+        # Encarregados
+        print(f"\n{cor_ciano('ENCARREGADOS DE EDUCAÇÃO')}")
+        print(f"{cor_amarelo('(Opcional - deixe em branco se não tiver)')}")
+        nome_pai = input_com_validacao("Nome do Pai: ", obrigatorio=False) or ""
+        telefone_pai = input_com_validacao("Telefone do Pai: ", obrigatorio=False) or ""
+        nome_mae = input_com_validacao("Nome da Mãe: ", obrigatorio=False) or ""
+        telefone_mae = input_com_validacao("Telefone da Mãe: ", obrigatorio=False) or ""
+        nome_responsavel = input_com_validacao("Nome do Responsável: ", obrigatorio=False) or ""
+        telefone_responsavel = input_com_validacao("Telefone do Responsável: ", obrigatorio=False) or ""
+
+        print(f"\n{cor_azul('='*40)}")
+        print(f"Nome: {nome}\nUsername: {username}\nClasse/Turma: {classe}/{turma}")
+        if not confirmar("\nConfirmar cadastro?"):
             return None
-        
-        tipo_utilizador = "Estudante" if tipo == 1 else "Administrador"
-        
-        # 2. Coletar dados básicos
-        self.interface.mostrar_titulo(f"CADASTRO DE {tipo_utilizador.upper()}")
-        
-        nome = self.interface.input_com_validação(
-            "Nome completo: ",
-            obrigatorio=True
-        )
-        
-        username = self.interface.input_com_validação(
-            "Username (apenas letras e números, sem espaços): ",
-            obrigatorio=True
-        )
-        username = username.lower().strip()
-        
-        # Validar username único
-        if not self._validar_username_unico(username):
-            self.interface.mostrar_erro("Este username já está em uso. Tente outro.")
-            return None
-        
-        password = self.interface.input_com_validação(
-            "Password: ",
-            obrigatorio=True,
-            mascara=True
-        )
-        
-        dados_basicos = {
-            "nome": nome.strip(),
-            "username": username,
-            "password": password
-        }
-        
-        # 3. Cadastrar conforme tipo
-        if tipo == 1:  # Estudante
-            return self._cadastrar_estudante(dados_basicos, escola_id)
-        else:  # Administrador
-            return self._cadastrar_administrador(dados_basicos, escola_id)
-    
-    # ============================================
-    # 5. LISTAGEM DE UTILIZADORES
-    # ============================================
-    
-    def listar_utilizadores(self, escola_id, nivel=None):
-        """
-        Lista utilizadores da escola
-        
-        Args:
-            escola_id (str): ID da escola
-            nivel (str, optional): Filtrar por nível ('Estudante' ou 'Administrador')
-        """
+
         try:
-            query = self.supabase.table('usuarios')\
-                .select('*')\
-                .eq('escola_id', escola_id)
-            
-            if nivel:
-                query = query.eq('nivel', nivel)
-            
-            resultado = query.execute()
-            usuarios = resultado.data
-            
-            if not usuarios:
-                self.interface.mostrar_info("Nenhum utilizador encontrado.")
+            estudante_id = str(uuid.uuid4())
+            qrcode_id = self._gerar_qrcode_id(escola_id)
+
+            dados = {
+                "id": estudante_id, "username": username, "password": self._hash_senha(password),
+                "nivel": "Estudante", "nome": nome, "email": email, "telefone": telefone,
+                "escola_id": escola_id, "classe": classe, "turma": turma, "curso": curso,
+                "tem_divida": True, "status_conta": "Ativa", "qrcode_id": qrcode_id,
+                "data_nascimento": data_nascimento, "created_at": datetime.now().isoformat(),
+                "nome_pai": nome_pai, "telefone_pai": telefone_pai, "nome_mae": nome_mae,
+                "telefone_mae": telefone_mae, "nome_responsavel": nome_responsavel,
+                "telefone_responsavel": telefone_responsavel
+            }
+
+            self.supabase.table('usuarios').insert(dados).execute()
+
+            # Gerar QR Code visual
+            turma_completa = f"{classe} {turma}".strip()
+            qr_path = gerar_qr_code_aluno(estudante_id, nome, turma_completa, qrcode_id)
+
+            mostrar_sucesso(f"Estudante {nome} cadastrado!")
+            mostrar_info(f"Username: {username}")
+            mostrar_info(f"QR Code ID: {cor_verde(qrcode_id)}")
+            if qr_path:
+                mostrar_info(f"QR Code salvo em: {qr_path}")
+            return dados
+        except Exception as e:
+            mostrar_erro(f"Erro: {e}")
+            return None
+
+    def _listar_utilizadores(self, escola_id):
+        try:
+            usuarios = self.supabase.table('usuarios')\
+                .select('username, nome, nivel, sub_nivel, status_conta, qrcode_id, iban')\
+                .eq('escola_id', escola_id).execute()
+
+            if not usuarios.data:
+                mostrar_info("Nenhum utilizador encontrado.")
                 return
-            
-            self.interface.mostrar_titulo("LISTA DE UTILIZADORES")
-            
-            for u in usuarios:
-                print(f"\n{self.interface.cores.azul('='*50)}")
-                print(f"{self.interface.cores.ciano(f'📌 {u["nome"]}')}")
-                print(f"   Username: {u['username']}")
-                print(f"   Nível: {u['nivel']}")
-                print(f"   Classe/Turma: {u.get('classe', 'N/A')} / {u.get('turma', 'N/A')}")
-                print(f"   Curso: {u.get('curso', 'N/A')}")
-                print(f"   Status Financeiro: {'❌ Débito' if u.get('tem_divida') else '✅ Em dia'}")
-            
-            print(f"\n{self.interface.cores.azul('='*50)}")
-            print(f"Total: {len(usuarios)} utilizador(es)")
-            
+
+            print(f"\n{cor_azul('='*60)}")
+            print(f"{cor_azul('LISTA DE UTILIZADORES'.center(60))}")
+            print(f"{cor_azul('='*60)}")
+
+            for u in usuarios.data:
+                iban_info = f" | IBAN: {u['iban'][:15]}..." if u.get('iban') else ""
+                qr_info = f" (QR: {u['qrcode_id']})" if u.get('qrcode_id') else ""
+                print(f"\n📌 {u['nome']} - @{u['username']}{qr_info}{iban_info}")
+                print(f"   Nível: {u['nivel']}{f' ({u["sub_nivel"]})' if u.get('sub_nivel') else ''}")
+                print(f"   Status: {cor_verde('Ativo') if u['status_conta'] == 'Ativa' else cor_vermelho('Bloqueado')}")
+
+            print(f"\n{cor_azul('='*60)}")
+            print(f"Total: {len(usuarios.data)} utilizador(es)")
         except Exception as e:
-            self.interface.mostrar_erro(f"Erro ao listar utilizadores: {e}")
-    
-    # ============================================
-    # 6. MENU PRINCIPAL
-    # ============================================
-    
-    def menu(self, escola_id):
-        """
-        Menu interativo do módulo de cadastro
-        
-        Args:
-            escola_id (str): ID da escola do administrador logado
-        """
+            mostrar_erro(f"Erro: {e}")
+
+    def menu(self, sessao):
+        escola_id = sessao.get('escola')
+        nivel = sessao.get('nivel')
+        sub_nivel = sessao.get('sub_nivel', '')
+
         while True:
-            self.interface.limpar_tela()
-            opcao = self.interface.menu_opcoes(
-                "MÓDULO DE CADASTRO",
-                [
-                    "Cadastrar Novo Utilizador",
-                    "Listar Estudantes",
-                    "Listar Administradores",
-                    "Listar Todos Utilizadores",
-                    "Voltar ao Menu Principal"
-                ]
-            )
-            
-            if opcao == 1:
-                self.cadastrar(escola_id)
-                input("\n" + self.interface.cores.amarelo("Pressione ENTER para continuar..."))
-                
-            elif opcao == 2:
-                self.listar_utilizadores(escola_id, NIVEL_ESTUDANTE)
-                input("\n" + self.interface.cores.amarelo("Pressione ENTER para continuar..."))
-                
-            elif opcao == 3:
-                self.listar_utilizadores(escola_id, NIVEL_ADMIN)
-                input("\n" + self.interface.cores.amarelo("Pressione ENTER para continuar..."))
-                
-            elif opcao == 4:
-                self.listar_utilizadores(escola_id)
-                input("\n" + self.interface.cores.amarelo("Pressione ENTER para continuar..."))
-                
-            elif opcao == 5:
+            limpar_tela()
+            mostrar_titulo("📝 MÓDULO DE CADASTRO")
+            print(f"\n{cor_ciano(f'Escola ID: {escola_id}')}")
+            print(f"{cor_ciano(f'Nível: {nivel}')}{f' ({sub_nivel})' if sub_nivel else ''}\n")
+
+            print("1 - 🏫 Criar Nova Escola (SuperAdmin apenas)")
+            print("2 - 👨‍💼 Cadastrar Administrador")
+            print("3 - 🎓 Cadastrar Estudante")
+            print("4 - 📋 Listar Utilizadores")
+            print("5 - ⬅️ Voltar")
+
+            opcao = input_com_validacao("\nEscolha: ", obrigatorio=True, tipo="numero")
+
+            if opcao == "1":
+                if sub_nivel == "SuperAdmin":
+                    self.criar_escola()
+                else:
+                    mostrar_erro("Apenas SuperAdmin pode criar escolas!")
+                input("\nPressione ENTER...")
+            elif opcao == "2":
+                self.criar_admin(escola_id)
+                input("\nPressione ENTER...")
+            elif opcao == "3":
+                self.criar_estudante(escola_id)
+                input("\nPressione ENTER...")
+            elif opcao == "4":
+                self._listar_utilizadores(escola_id)
+                input("\nPressione ENTER...")
+            elif opcao == "5":
                 break
+            else:
+                mostrar_erro("Opção inválida!")
+                input("\nPressione ENTER...")
 
 
-# ============================================
-# FUNÇÃO DE INTEGRAÇÃO PARA O MAIN
-# ============================================
-
-def iniciar_cadastro(escola_id):
-    """
-    Função de integração para ser chamada pelo main.py
-    
-    Args:
-        escola_id (str): ID da escola do administrador logado
-    """
+def iniciar_cadastro(sessao):
     cadastro = Cadastro()
-    cadastro.menu(escola_id)
+    cadastro.menu(sessao)
 
-
-# ============================================
-# TESTE DO MÓDULO
-# ============================================
 
 if __name__ == "__main__":
-    print("🧪 Teste do módulo Cadastro")
-    print("⚠️ Para testar, execute o main.py com um administrador logado.")
+    print("🧪 Módulo Cadastro carregado")
