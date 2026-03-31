@@ -14,6 +14,7 @@ import uuid
 import hashlib
 import re
 import io
+import json
 import qrcode
 from PIL import Image
 from typing import Optional, Dict, List, Any
@@ -21,6 +22,19 @@ from typing import Optional, Dict, List, Any
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from modules.database_config import db_config
+
+# ============================================
+# CARREGAMENTO DO TEMA GLOBAL
+# ============================================
+with open('theme_config.json', 'r', encoding='utf-8') as f:
+    THEME = json.load(f)
+
+COLORS = THEME['colors']
+TYPOGRAPHY = THEME['typography']
+SPACING = THEME['spacing']
+BORDER_RADIUS = THEME['borderRadius']
+SHADOWS = THEME['shadows']
+ANIMATION = THEME['animation']
 
 # ============================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -33,79 +47,152 @@ st.set_page_config(
 )
 
 # ============================================
-# CORES
-# ============================================
-COLORS = {
-    "primary": "#1E3A8A",
-    "secondary": "#3B82F6",
-    "success": "#10B981",
-    "danger": "#EF4444",
-    "warning": "#F59E0B",
-    "info": "#3B82F6",
-}
-
-# ============================================
-# ESTILOS CSS
+# ESTILOS CSS COM TEMA GLOBAL
 # ============================================
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    * {{ font-family: 'Inter', sans-serif; }}
-    
+
+    :root {{
+        --bg: {COLORS['background']};
+        --surface: {COLORS['surface']};
+        --surface-hover: {COLORS['surfaceHover']};
+        --primary: {COLORS['primary']};
+        --primary-light: {COLORS['primaryLight']};
+        --gold: {COLORS['gold']};
+        --success: {COLORS['success']};
+        --danger: {COLORS['danger']};
+        --warning: {COLORS['warning']};
+        --text: {COLORS['text']};
+        --text-secondary: {COLORS['textSecondary']};
+        --border: {COLORS['border']};
+    }}
+
+    * {{
+        font-family: {TYPOGRAPHY['fontFamily']};
+    }}
+
+    body {{
+        background-color: {COLORS['background']};
+        color: {COLORS['text']};
+    }}
+
     .main-header {{
-        background: linear-gradient(135deg, {COLORS['primary']} 0%, {COLORS['secondary']} 100%);
-        padding: 2rem;
-        border-radius: 20px;
-        margin-bottom: 2rem;
-        color: white;
+        background: linear-gradient(135deg, {COLORS['primary']} 0%, {COLORS['primaryLight']} 100%);
+        padding: {SPACING['lg']};
+        border-radius: {BORDER_RADIUS['xl']};
+        margin-bottom: {SPACING['lg']};
+        color: {COLORS['text']};
         text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        box-shadow: {SHADOWS['lg']};
     }}
-    
-    .main-header h1 {{ font-size: 2.5rem; margin-bottom: 0.5rem; font-weight: 700; }}
-    
+
+    .main-header h1 {{
+        font-size: {TYPOGRAPHY['headings']['h1']};
+        margin-bottom: {SPACING['xs']};
+        font-weight: 700;
+    }}
+
     .card {{
-        background: white;
-        border-radius: 20px;
-        padding: 1.5rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
-        border: 1px solid rgba(0,0,0,0.05);
+        background: {COLORS['surface']};
+        border-radius: {BORDER_RADIUS['lg']};
+        padding: {SPACING['lg']};
+        box-shadow: {SHADOWS['md']};
+        margin-bottom: {SPACING['sm']};
+        transition: {ANIMATION['transition']};
+        border: 1px solid {COLORS['border']};
     }}
-    
-    .card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }}
-    
+
+    .card:hover {{
+        transform: translateY(-5px);
+        box-shadow: {SHADOWS['lg']};
+        background-color: {COLORS['surfaceHover']};
+    }}
+
     .metric-card {{
         text-align: center;
-        background: linear-gradient(135deg, {COLORS['primary']} 0%, {COLORS['secondary']} 100%);
-        border-radius: 20px;
-        padding: 1.2rem;
-        color: white;
+        background: linear-gradient(135deg, {COLORS['primary']} 0%, {COLORS['primaryLight']} 100%);
+        border-radius: {BORDER_RADIUS['lg']};
+        padding: {SPACING['md']};
+        color: {COLORS['text']};
+        box-shadow: {SHADOWS['md']};
     }}
-    
-    .metric-value {{ font-size: 2.2rem; font-weight: 800; }}
-    .metric-label {{ font-size: 0.9rem; opacity: 0.9; margin-top: 0.3rem; }}
-    
+
+    .metric-value {{
+        font-size: 2.2rem;
+        font-weight: 800;
+    }}
+
+    .metric-label {{
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-top: {SPACING['xs']};
+    }}
+
     .stButton button {{
-        background: linear-gradient(135deg, {COLORS['primary']} 0%, {COLORS['secondary']} 100%);
-        color: white;
-        border-radius: 12px;
-        padding: 0.6rem 1.2rem;
+        background: linear-gradient(135deg, {COLORS['primary']} 0%, {COLORS['primaryLight']} 100%);
+        color: {COLORS['text']};
+        border-radius: {BORDER_RADIUS['md']};
+        padding: {SPACING['sm']} {SPACING['md']};
         font-weight: 600;
-        transition: all 0.3s ease;
+        transition: {ANIMATION['transition']};
         border: none;
         width: 100%;
     }}
-    
-    .stButton button:hover {{ transform: scale(1.02); box-shadow: 0 5px 15px rgba(30,58,138,0.4); }}
-    
-    .badge-success {{ background: {COLORS['success']}; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }}
-    .badge-warning {{ background: {COLORS['warning']}; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }}
-    .badge-danger {{ background: {COLORS['danger']}; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }}
-    
-    .qr-container {{ background: white; border-radius: 20px; padding: 1.5rem; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }}
-    .pay-link {{ background: #f0f9ff; padding: 1rem; border-radius: 10px; font-family: monospace; word-break: break-all; }}
+
+    .stButton button:hover {{
+        transform: {ANIMATION['hoverScale']};
+        box-shadow: {SHADOWS['md']};
+    }}
+
+    .badge-success {{
+        background: {COLORS['success']};
+        color: {COLORS['text']};
+        padding: {SPACING['xs']} {SPACING['sm']};
+        border-radius: {BORDER_RADIUS['xl']};
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-block;
+    }}
+
+    .badge-warning {{
+        background: {COLORS['warning']};
+        color: {COLORS['text']};
+        padding: {SPACING['xs']} {SPACING['sm']};
+        border-radius: {BORDER_RADIUS['xl']};
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-block;
+    }}
+
+    .badge-danger {{
+        background: {COLORS['danger']};
+        color: {COLORS['text']};
+        padding: {SPACING['xs']} {SPACING['sm']};
+        border-radius: {BORDER_RADIUS['xl']};
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-block;
+    }}
+
+    .qr-container {{
+        background: {COLORS['surface']};
+        border-radius: {BORDER_RADIUS['lg']};
+        padding: {SPACING['lg']};
+        text-align: center;
+        box-shadow: {SHADOWS['lg']};
+        border: 1px solid {COLORS['border']};
+    }}
+
+    .pay-link {{
+        background: {COLORS['surfaceHover']};
+        padding: {SPACING['sm']};
+        border-radius: {BORDER_RADIUS['md']};
+        font-family: monospace;
+        word-break: break-all;
+        border: 1px solid {COLORS['border']};
+        color: {COLORS['primaryLight']};
+    }}
 </style>
 """, unsafe_allow_html=True)
 
