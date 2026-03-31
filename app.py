@@ -25,6 +25,7 @@ from modules.database_config import db_config
 from modules.logging_config import logger
 from modules.financeiro_pay import FinaXPay
 from modules.rh import RHManager
+from modules.bi import BIManager
 
 # ============================================
 # CARREGAMENTO DO TEMA GLOBAL
@@ -280,6 +281,8 @@ def init_session_state():
         st.session_state.finax_pay = None
     if "rh_manager" not in st.session_state:
         st.session_state.rh_manager = None
+    if "bi_manager" not in st.session_state:
+        st.session_state.bi_manager = None
 
 init_session_state()
 supabase = st.session_state.supabase
@@ -317,6 +320,7 @@ def fazer_login(username: str, password: str) -> Optional[Dict]:
         if instituicao_id:
             st.session_state.finax_pay = FinaXPay(supabase, instituicao_id)
             st.session_state.rh_manager = RHManager(supabase, instituicao_id)
+            st.session_state.bi_manager = BIManager(supabase, instituicao_id)
 
         logger.info(f"Usuário {username} fez login com sucesso")
         return user_data

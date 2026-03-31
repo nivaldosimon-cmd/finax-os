@@ -41,13 +41,14 @@ npm install lucide-react react
 ### Importação de componentes:
 
 ```javascript
-import { Sidebar, KPICards, FinaXPay } from './assets/components';
+import { Sidebar, KPICards, FinaXPay, BIDashboard } from './assets/components';
 ```
 
 Ou importação individual:
 
 ```javascript
 import Sidebar from './assets/components/Sidebar';
+import BIDashboard from './assets/components/BIDashboard';
 ```
 
 ## 🔧 Componentes
@@ -200,6 +201,47 @@ Badge fixo de segurança no canto inferior direito.
 ```jsx
 <SecurityBadge />
 ```
+
+### BIDashboard
+
+Dashboard completo de Business Intelligence com KPIs, alertas e tendências.
+
+**Props:**
+- `kpis` (object): Dados de KPIs calculados
+- `alertas` (array): Lista de alertas automáticos
+- `tendencias` (array): Dados de tendências (últimos meses)
+
+**Exemplo:**
+
+```jsx
+import { BIDashboard } from './assets/components';
+
+const kpis = {
+  alunos: { total: 150, devedores: 22, adimplentes: 128 },
+  financeiro: { total_receitas: 2500000, saldo_atual: 700000, margem_lucro: 28.5 },
+  propinas: { pendentes: 550000, pagas: 2500000 },
+  salarios: { pendentes: 120000 },
+  indicadores: { taxa_inadimplencia: 14.7, projecao_caixa: 1130000, saude_financeira: 85 }
+};
+
+const alertas = [
+  { tipo: 'INADIMPLENCIA', severidade: 'ALTA', mensagem: 'Taxa acima de 20%' }
+];
+
+const tendencias = [
+  // Dados dos últimos 6 meses
+];
+
+<BIDashboard kpis={kpis} alertas={alertas} tendencias={tendencias} />
+```
+
+**Funcionalidades:**
+- Exibição de alertas por severidade
+- Grid de KPIs principais
+- Cards de receitas/despesas/pendências
+- Gráfico de tendências (últimos 6 meses)
+- Score de saúde financeira
+- Formatação automática de moeda (AOA)
 
 ## 🎯 Tema e Estilo
 
