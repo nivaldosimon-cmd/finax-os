@@ -22,6 +22,9 @@ from typing import Optional, Dict, List, Any
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from modules.database_config import db_config
+from modules.logging_config import logger
+from modules.financeiro_pay import FinaXPay
+from modules.rh import RHManager
 
 # ============================================
 # CARREGAMENTO DO TEMA GLOBAL
@@ -273,6 +276,10 @@ def init_session_state():
         st.session_state.page = "dashboard"
     if "show_signup" not in st.session_state:
         st.session_state.show_signup = False
+    if "finax_pay" not in st.session_state:
+        st.session_state.finax_pay = None
+    if "rh_manager" not in st.session_state:
+        st.session_state.rh_manager = None
 
 init_session_state()
 supabase = st.session_state.supabase
@@ -290,7 +297,8 @@ def fazer_login(username: str, password: str) -> Optional[Dict]:
             return None
         if usuario.get('status_conta') == "Bloqueada":
             return None
-        return {
+
+        user_data = {
             "id": usuario.get('id'),
             "nome": usuario.get('nome'),
             "username": usuario.get('username'),
@@ -303,7 +311,17 @@ def fazer_login(username: str, password: str) -> Optional[Dict]:
             "tem_divida": usuario.get('tem_divida', False),
             "qrcode_id": usuario.get('qrcode_id', '')
         }
+
+        # Inicializar módulos
+        instituicao_id = usuario.get('instituicao_id')
+        if instituicao_id:
+            st.session_state.finax_pay = FinaXPay(supabase, instituicao_id)
+            st.session_state.rh_manager = RHManager(supabase, instituicao_id)
+
+        logger.info(f"Usuário {username} fez login com sucesso")
+        return user_data
     except Exception as e:
+        logger.error(f"Erro ao fazer login: {e}")
         return None
 
 # ============================================
