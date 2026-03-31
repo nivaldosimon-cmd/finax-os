@@ -1,6 +1,6 @@
 """
 UMBRELLA AI - SISTEMA DE GESTÃO ESCOLAR
-Versão Autocorretiva - Sem Bugs
+Versão Final - Sem Erros
 """
 
 import streamlit as st
@@ -99,30 +99,25 @@ st.markdown("""
 # ============================================
 
 def validar_email(email):
-    """Valida formato de email"""
     if not email:
         return False
     padrao = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(padrao, email) is not None
 
 def validar_telefone(telefone):
-    """Valida telefone (9 dígitos)"""
     if not telefone:
         return False
     return telefone.isdigit() and len(telefone) == 9
 
 def validar_username(username):
-    """Valida username (apenas letras, números, ponto e underline)"""
     if not username:
         return False
     return re.match(r'^[a-zA-Z0-9._]+$', username) is not None
 
 def validar_campos(campos):
-    """Retorna lista de campos vazios"""
     return [nome for nome, valor in campos.items() if not valor or not str(valor).strip()]
 
 def limpar_texto(texto):
-    """Remove espaços extras e normaliza"""
     if not texto:
         return ""
     return str(texto).strip()
@@ -141,10 +136,6 @@ def init_session_state():
         st.session_state.page = "dashboard"
     if "show_signup" not in st.session_state:
         st.session_state.show_signup = False
-    if "error" not in st.session_state:
-        st.session_state.error = None
-    if "success" not in st.session_state:
-        st.session_state.success = None
 
 init_session_state()
 supabase = st.session_state.supabase
@@ -177,7 +168,6 @@ def login_page():
                     if user:
                         st.session_state.authenticated = True
                         st.session_state.user = user
-                        st.session_state.error = None
                         st.rerun()
                     else:
                         st.error("❌ Username ou password incorretos!")
@@ -551,9 +541,8 @@ def dashboard():
         config_page(user, supabase, escola_id)
 
 # ============================================
-# PÁGINAS (VERSÃO SIMPLIFICADA)
+# PÁGINA DASHBOARD HOME
 # ============================================
-
 def dashboard_home(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -622,6 +611,9 @@ def dashboard_home(user, supabase, escola_id):
         st.info("Nenhuma atividade recente.")
     st.markdown('</div>', unsafe_allow_html=True)
 
+# ============================================
+# PÁGINA PRESENÇAS
+# ============================================
 def presencas_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -640,7 +632,6 @@ def presencas_page(user, supabase, escola_id):
         if st.button("Registrar Entrada", key="presenca_btn", use_container_width=True):
             if qr_code:
                 qr_clean = limpar_texto(qr_code)
-                # Buscar por qrcode_id ou username
                 aluno = supabase.table('usuarios').select('*').eq('qrcode_id', qr_clean).eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
                 if not aluno.data:
                     aluno = supabase.table('usuarios').select('*').eq('username', qr_clean).eq('escola_id', escola_id).eq('nivel', 'Estudante').execute()
@@ -652,7 +643,6 @@ def presencas_page(user, supabase, escola_id):
                     data = agora.strftime("%Y-%m-%d")
                     status = "ATRASADO" if agora.hour > 7 or (agora.hour == 7 and agora.minute > 30) else "PRESENTE"
                     
-                    # Verificar se já registou hoje
                     ja_registou = supabase.table('presencas').select('id').eq('aluno_id', aluno_data['id']).eq('data', data).execute()
                     if ja_registou.data:
                         st.warning(f"⚠️ {aluno_data['nome']} já registou presença hoje!")
@@ -689,6 +679,9 @@ def presencas_page(user, supabase, escola_id):
         
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ============================================
+# PÁGINA ALUNOS
+# ============================================
 def alunos_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -727,7 +720,6 @@ def alunos_page(user, supabase, escola_id):
                 novo_curso = st.text_input("Curso", key="novo_curso")
             
             if st.form_submit_button("Cadastrar"):
-                # Limpar campos
                 nome_clean = limpar_texto(novo_nome)
                 username_clean = limpar_texto(novo_username).lower()
                 password_clean = limpar_texto(novo_password)
@@ -737,24 +729,15 @@ def alunos_page(user, supabase, escola_id):
                 turma_clean = limpar_texto(novo_turma)
                 curso_clean = limpar_texto(novo_curso)
                 
-                # Validar
                 erros = []
-                if not nome_clean:
-                    erros.append("Nome completo")
-                if not username_clean:
-                    erros.append("Username")
-                if not password_clean or len(password_clean) < 4:
-                    erros.append("Password (mínimo 4 caracteres)")
-                if not email_clean or not validar_email(email_clean):
-                    erros.append("Email válido")
-                if not telefone_clean or not validar_telefone(telefone_clean):
-                    erros.append("Telefone (9 dígitos)")
-                if not classe_clean:
-                    erros.append("Classe")
-                if not turma_clean:
-                    erros.append("Turma")
-                if not curso_clean:
-                    erros.append("Curso")
+                if not nome_clean: erros.append("Nome completo")
+                if not username_clean: erros.append("Username")
+                if not password_clean or len(password_clean) < 4: erros.append("Password (mínimo 4 caracteres)")
+                if not email_clean or not validar_email(email_clean): erros.append("Email válido")
+                if not telefone_clean or not validar_telefone(telefone_clean): erros.append("Telefone (9 dígitos)")
+                if not classe_clean: erros.append("Classe")
+                if not turma_clean: erros.append("Turma")
+                if not curso_clean: erros.append("Curso")
                 
                 if erros:
                     st.error(f"❌ Campos inválidos: {', '.join(erros)}")
@@ -763,7 +746,6 @@ def alunos_page(user, supabase, escola_id):
                         aluno_id = str(uuid.uuid4())
                         senha_hash = hashlib.sha256(password_clean.encode()).hexdigest()
                         
-                        # Gerar QR Code ID
                         ultimo = supabase.table('usuarios').select('qrcode_id').eq('escola_id', escola_id).not_.is_('qrcode_id', 'null').order('qrcode_id', desc=True).limit(1).execute()
                         if ultimo.data and ultimo.data[0]['qrcode_id']:
                             qrcode_id = str(int(ultimo.data[0]['qrcode_id']) + 1)
@@ -771,20 +753,10 @@ def alunos_page(user, supabase, escola_id):
                             qrcode_id = "1001"
                         
                         dados = {
-                            "id": aluno_id,
-                            "username": username_clean,
-                            "password": senha_hash,
-                            "nivel": "Estudante",
-                            "nome": nome_clean,
-                            "email": email_clean,
-                            "telefone": telefone_clean,
-                            "escola_id": escola_id,
-                            "classe": classe_clean,
-                            "turma": turma_clean,
-                            "curso": curso_clean,
-                            "tem_divida": True,
-                            "status_conta": "Ativa",
-                            "qrcode_id": qrcode_id,
+                            "id": aluno_id, "username": username_clean, "password": senha_hash,
+                            "nivel": "Estudante", "nome": nome_clean, "email": email_clean, "telefone": telefone_clean,
+                            "escola_id": escola_id, "classe": classe_clean, "turma": turma_clean, "curso": curso_clean,
+                            "tem_divida": True, "status_conta": "Ativa", "qrcode_id": qrcode_id,
                             "created_at": datetime.now().isoformat()
                         }
                         supabase.table('usuarios').insert(dados).execute()
@@ -793,6 +765,9 @@ def alunos_page(user, supabase, escola_id):
                     except Exception as e:
                         st.error(f"❌ Erro: {e}")
 
+# ============================================
+# PÁGINA NOTAS
+# ============================================
 def notas_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -859,6 +834,9 @@ def notas_page(user, supabase, escola_id):
             st.info("Nenhuma nota registada.")
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ============================================
+# PÁGINA RANKING
+# ============================================
 def ranking_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -889,6 +867,9 @@ def ranking_page(user, supabase, escola_id):
     fig = px.bar(df.head(10), x='Nome', y='Média', title="Top 10 Alunos", color='Média', color_continuous_scale='Viridis')
     st.plotly_chart(fig, use_container_width=True)
 
+# ============================================
+# PÁGINA FINANCEIRO
+# ============================================
 def financeiro_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -924,6 +905,9 @@ def financeiro_page(user, supabase, escola_id):
     else:
         st.info("Nenhum aluno com débito pendente.")
 
+# ============================================
+# PÁGINA MATERIAL
+# ============================================
 def material_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -968,6 +952,9 @@ def material_page(user, supabase, escola_id):
                     else:
                         st.warning("Preencha todos os campos!")
 
+# ============================================
+# PÁGINA DENÚNCIAS
+# ============================================
 def denuncias_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -1022,6 +1009,9 @@ def denuncias_page(user, supabase, escola_id):
         else:
             st.info("Nenhuma denúncia registada.")
 
+# ============================================
+# PÁGINA QR CODES
+# ============================================
 def qrcodes_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
@@ -1105,6 +1095,9 @@ def qrcodes_page(user, supabase, escola_id):
         
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ============================================
+# PÁGINA CONFIGURAÇÕES
+# ============================================
 def config_page(user, supabase, escola_id):
     st.markdown("""
     <div class="main-header">
